@@ -1,0 +1,21 @@
+[package]
+name = "forc-tracing"
+version = "0.1.0"
+edition = "2021"
+homepage = "https://fuel.network/"
+license = "Apache-2.0"
+repository = "https://github.com/FuelLabs/forc-telemetry"
+description = "A tracing library to implement Fuel telemetry"
+
+[lib]
+name = "forc_telemetry"
+path = "src/lib.rs"
+
+[dependencies]
+chrono = "0.4"
+dirs = "6.0"
+sysinfo = "0.33"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["json"] }
