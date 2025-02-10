@@ -2,6 +2,8 @@ pub mod errors;
 pub mod file_watcher;
 
 use crate::errors::TelemetryError;
+
+use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::Utc;
 use dirs::home_dir;
 use regex::Regex;
@@ -305,8 +307,11 @@ where
             return Ok(());
         }
 
+        let mut buffer = String::new();
+        let mut tmp_writer = Writer::new(&mut buffer);
+
         write!(
-            &mut writer,
+            &mut tmp_writer,
             "{} {:>5} {}:{}:{} {}:{}:{} ",
             Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ"),
             event.metadata().level(),
@@ -320,7 +325,7 @@ where
 
         if let Some(scope) = ctx.event_scope() {
             for span in scope.from_root() {
-                write!(writer, "{}", span.name())?;
+                write!(tmp_writer, "{}", span.name())?;
 
                 if let Some(fields) = span.extensions().get::<FormattedFields<N>>() {
                     if !fields.is_empty() {
@@ -335,17 +340,21 @@ where
                             .replace_all(fields.fields.as_str(), "")
                             .to_string();
 
-                        write!(writer, "{{{fields}}}")?;
+                        write!(tmp_writer, "{{{fields}}}")?;
                     }
                 };
 
-                write!(writer, ":")?;
+                write!(tmp_writer, ":")?;
             }
 
-            write!(writer, " ")?;
+            write!(tmp_writer, " ")?;
         }
 
-        ctx.field_format().format_fields(writer.by_ref(), event)?;
-        writeln!(writer)
+        ctx.field_format()
+            .format_fields(tmp_writer.by_ref(), event)?;
+
+        let encoded = STANDARD.encode(&buffer);
+        writer.write_str(&encoded)?;
+        writer.write_str("\n")
     }
 }

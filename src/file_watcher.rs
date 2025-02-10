@@ -158,7 +158,9 @@ impl FileWatcher {
                 .map(|line| line.map_err(TelemetryError::from))
                 .collect::<Result<Vec<_>>>()?;
 
-            for line in lines {
+            for base64_line in lines {
+                let decoded_line = STANDARD.decode(base64_line.as_bytes())?;
+                let line = String::from_utf8(decoded_line)?;
                 let event = TELEMETRY_EVENT_REGEX
                     .as_ref()?
                     .captures(&line)
@@ -225,7 +227,6 @@ impl FileWatcher {
                     line_protocol_builder.close_line().build(),
                 )?);
             }
-
 
             if body.is_empty() {
                 continue;

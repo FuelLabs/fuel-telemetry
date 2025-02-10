@@ -1,12 +1,14 @@
-use thiserror::Error;
+use base64::DecodeError;
 use std::{io, path::PathBuf, string::FromUtf8Error};
+use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum TelemetryError {
     //
     // External errors
     //
-
+    #[error("Base64 error: {0}")]
+    Base64(#[from] DecodeError),
     #[error("IO error: {0}")]
     IO(String),
     #[error("Nix error: {0}")]
@@ -17,7 +19,6 @@ pub enum TelemetryError {
     ReqwestCloneFailed,
     #[error("UTF-8 error: {0}")]
     Utf8(String),
-
 
     //
     // General errors
@@ -38,7 +39,6 @@ pub enum TelemetryError {
     //
     // FileWatcher errors
     //
-
     #[error("Invalid rollfile interval: {0}")]
     InvalidRollfileInterval(#[from] std::num::ParseIntError),
     #[error("Tracing event is invalid: {0}")]
@@ -47,7 +47,6 @@ pub enum TelemetryError {
     InvalidTracingRegex(#[from] regex::Error),
     #[error("Tracing payload is invalid: {0}")]
     InvalidTracingPayload(String),
-
 }
 
 impl From<&TelemetryError> for TelemetryError {
