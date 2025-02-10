@@ -1,5 +1,6 @@
 use crate::{telemetry_config, EnvSetting, Result, TelemetryError};
 
+use base64::{engine::general_purpose::STANDARD, Engine};
 use influxdb_line_protocol::LineProtocolBuilder;
 use nix::{
     errno::Errno,
