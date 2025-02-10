@@ -1,6 +1,7 @@
 use crate::{telemetry_config, EnvSetting, Result, TelemetryError};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
+use chrono::NaiveDateTime;
 use influxdb_line_protocol::LineProtocolBuilder;
 use nix::{
     errno::Errno,
@@ -46,7 +47,7 @@ fn config() -> Result<&'static FileWatcherConfig> {
             .map_err(TelemetryError::InvalidRollfileInterval)?;
 
         let influxdb_url = format!(
-            "{}/api/v2/write?org={}&bucket={}&precision=s",
+            "{}/api/v2/write?org={}&bucket={}&precision=ns",
             get_env(
                 "INFLUXDB_URL",
                 "https://us-east-1-1.aws.cloud2.influxdata.com"
@@ -217,10 +218,14 @@ impl FileWatcher {
                     event
                         .name("timestamp")
                         .and_then(|m| {
-                            chrono::DateTime::parse_from_rfc3339(m.as_str())
+                            NaiveDateTime::parse_from_str(
+                                m.as_str(),
+                                "%Y-%m-%dT%H:%M:%S%.9f%Z",
+                            )
                                 .ok()
-                                .map(|dt| dt.timestamp())
+                            .map(|dt| dt.and_utc().timestamp_nanos_opt())
                         })
+                        .flatten()
                         .unwrap_or(0),
                 );
 

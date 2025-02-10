@@ -332,7 +332,7 @@ where
         write!(
             &mut tmp_writer,
             "{} {:>5} {}:{}:{} {}:{}:{} ",
-            Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ"),
+            Utc::now().format("%Y-%m-%dT%H:%M:%S%.9fZ"),
             event.metadata().level(),
             self.triple,
             self.os,
