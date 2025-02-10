@@ -1,5 +1,5 @@
 [package]
-name = "forc-tracing"
+name = "forc-telemetry"
 version = "0.1.0"
 edition = "2021"
 homepage = "https://fuel.network/"
@@ -14,6 +14,10 @@ path = "src/lib.rs"
 [dependencies]
 chrono = "0.4"
 dirs = "6.0"
+influxdb-line-protocol = "2.0"
+nix = {version = "0.29", features = ["feature", "fs", "process", "resource","signal", "time"]}
+regex = "1.5"
+reqwest = {version = "0.12", features = ["blocking"]}
 sysinfo = "0.33"
 thiserror = "2.0"
 tracing = "0.1"

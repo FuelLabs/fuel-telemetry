@@ -1,9 +1,16 @@
 pub mod errors;
+pub mod file_watcher;
 
-use crate::errors::{Result, TelemetryError};
+use crate::errors::TelemetryError;
 use chrono::Utc;
 use dirs::home_dir;
-use std::{env::var_os, fs::create_dir_all, path::PathBuf};
+use regex::Regex;
+use std::{
+    env::{var, var_os},
+    fs::create_dir_all,
+    path::PathBuf,
+    sync::LazyLock,
+};
 use sysinfo::System;
 use tracing::{Event, Subscriber};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
@@ -17,6 +24,8 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     Registry,
 };
+
+pub type Result<T> = std::result::Result<T, TelemetryError>;
 
 /// Re-export tracing macros for convenience
 ///
@@ -36,46 +45,81 @@ pub use tracing::{debug, error, event, info, span, trace, warn, Level};
 // Crate static configuration
 //
 
-struct EnvSetting {
+pub struct TelemetryConfig {
+    fuelup_tmp: String,
+    fuelup_log: String,
+}
+
+pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
+    pub static TELEMETRY_CONFIG: LazyLock<Result<TelemetryConfig>> = LazyLock::new(|| {
+        let fuelup_home_env = EnvSetting {
+            name: "FUELUP_HOME",
+            default: ".fuelup",
+        };
+
+        let fuelup_tmp_env = EnvSetting {
+            name: "FUELUP_TMP",
+            default: "tmp",
+        };
+
+        let fuelup_log_env = EnvSetting {
+            name: "FUELUP_LOG",
+            default: "log",
+        };
+
+        let fuelup_home = var_os(fuelup_home_env.name)
+            .map(PathBuf::from)
+            .or_else(|| home_dir().map(|dir| dir.join(fuelup_home_env.default)))
+            .ok_or(TelemetryError::UnreachableHomeDir)?
+            .into_os_string()
+            .into_string()
+            .map_err(|e| TelemetryError::InvalidHomeDir(e.to_string_lossy().into()))?;
+
+        let fuelup_tmp = var_os(fuelup_tmp_env.name)
+            .unwrap_or_else(|| {
+                PathBuf::from(fuelup_home.clone())
+                    .join(fuelup_tmp_env.default)
+                    .into_os_string()
+            })
+            .into_string()
+            .map_err(|e| TelemetryError::InvalidTmpDir(e.to_string_lossy().into()))?;
+
+        let fuelup_log = var_os(fuelup_log_env.name)
+            .unwrap_or_else(|| {
+                PathBuf::from(fuelup_home.clone())
+                    .join(fuelup_log_env.default)
+                    .into_os_string()
+            })
+            .into_string()
+            .map_err(|e| TelemetryError::InvalidLogDir(e.to_string_lossy().into()))?;
+
+        create_dir_all(&fuelup_tmp)?;
+        create_dir_all(&fuelup_log)?;
+
+        Ok(TelemetryConfig {
+            fuelup_tmp,
+            fuelup_log,
+        })
+    });
+
+    TELEMETRY_CONFIG
+        .as_ref()
+        .map_err(|e| TelemetryError::InvalidConfig(e.to_string()))
+}
+
+pub struct EnvSetting {
     name: &'static str,
     default: &'static str,
 }
 
-const FUELUP_HOME: EnvSetting = EnvSetting {
-    name: "FUELUP_HOME",
-    default: ".fuelup",
-};
+impl EnvSetting {
+    pub fn new(name: &'static str, default: &'static str) -> Self {
+        Self { name, default }
+    }
 
-const FUELUP_TMP: EnvSetting = EnvSetting {
-    name: "FUELUP_TMP",
-    default: "tmp",
-};
-
-// Returns the path to the `fuelup` tmp directory.
-//
-// This directory is used for storing temporary files. In particular, it is used
-// for storing telemetry metrics and tracing files.
-pub(crate) fn fuelup_tmp() -> Result<String> {
-    let fuelup_home = var_os(FUELUP_HOME.name)
-        .map(PathBuf::from)
-        .or_else(|| home_dir().map(|dir| dir.join(FUELUP_HOME.default)))
-        .ok_or(TelemetryError::HomeDirUnreachable)?
-        .into_os_string()
-        .into_string()
-        .map_err(|e| TelemetryError::HomeDirInvalid(e.to_string_lossy().into()));
-
-    let fuelup_tmpdir = var_os(FUELUP_TMP.name)
-        .unwrap_or_else(|| {
-            PathBuf::from(fuelup_home.unwrap())
-                .join(FUELUP_TMP.default)
-                .into_os_string()
-        })
-        .into_string()
-        .map_err(|e| TelemetryError::TmpDirInvalid(e.to_string_lossy().into()))?;
-
-    create_dir_all(&fuelup_tmpdir).map_err(TelemetryError::IO)?;
-
-    Ok(fuelup_tmpdir)
+    pub fn get(&self) -> String {
+        var(self.name).unwrap_or_else(|_| self.default.to_string())
+    }
 }
 
 //
@@ -109,13 +153,20 @@ impl TelemetryLayer {
     /// info!("Hello from telemetry");
     /// ```
     pub fn new() -> Result<(Self, WorkerGuard)> {
-        let (writer, guard) = tracing_appender::non_blocking(tracing_appender::rolling::hourly(
-            PathBuf::from(fuelup_tmp()?),
-            format!("{}.telemetry", env!("CARGO_CRATE_NAME")),
-        ));
+        let (writer, guard) = {
+            if var("FUELUP_NO_TELEMETRY").is_ok() {
+                tracing_appender::non_blocking(std::io::sink())
+            } else {
+                tracing_appender::non_blocking(tracing_appender::rolling::hourly(
+                    PathBuf::from(telemetry_config()?.fuelup_tmp.clone()),
+                    format!("{}.telemetry", env!("CARGO_CRATE_NAME")),
+                ))
+            }
+        };
 
         let inner = tracing_subscriber::fmt::layer()
             .with_writer(writer)
+            .with_ansi(false)
             .event_format(TelemetryFormatter::new());
 
         Ok((Self { inner }, guard))
@@ -172,7 +223,6 @@ impl TelemetryLayer {
 /// - `version`: the version of the crate
 /// - `file`: the file where the event was generated
 ///
-#[derive(Default)]
 struct TelemetryFormatter {
     triple: String,
     os: String,
@@ -200,7 +250,7 @@ impl TelemetryFormatter {
             triple: format!(
                 "{}-{}-{}",
                 match std::env::consts::ARCH {
-                    "aarch64" | "x86_64" => std::env::consts::ARCH,
+                    arch @ ("aarch64" | "x86_64") => arch,
                     _ => "unknown",
                 },
                 match std::env::consts::OS {
@@ -239,19 +289,33 @@ where
         mut writer: Writer<'_>,
         event: &Event<'_>,
     ) -> std::fmt::Result {
-        let metadata = event.metadata();
+        let wants_telemetry = ctx.event_scope().into_iter().flatten().any(|span| {
+            if let Some(fields) = span.extensions().get::<FormattedFields<N>>() {
+                if fields.contains("telemetry=false") {
+                    return false;
+                } else if fields.contains("telemetry=true") {
+                    return true;
+                }
+            }
+
+            false
+        });
+
+        if !wants_telemetry {
+            return Ok(());
+        }
 
         write!(
             &mut writer,
             "{} {:>5} {}:{}:{} {}:{}:{} ",
             Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ"),
-            metadata.level(),
+            event.metadata().level(),
             self.triple,
             self.os,
             self.os_version,
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
-            metadata.file().unwrap_or("unknown"),
+            event.metadata().file().unwrap_or("unknown"),
         )?;
 
         if let Some(scope) = ctx.event_scope() {
@@ -260,6 +324,17 @@ where
 
                 if let Some(fields) = span.extensions().get::<FormattedFields<N>>() {
                     if !fields.is_empty() {
+                        static STRIP_TELEMETRY_REGEX: LazyLock<Result<Regex>> =
+                            LazyLock::new(|| {
+                                Ok(regex::Regex::new(r"\s*telemetry=(true|false)\s*")?)
+                            });
+
+                        let fields = STRIP_TELEMETRY_REGEX
+                            .as_ref()
+                            .map_err(|_| std::fmt::Error)?
+                            .replace_all(fields.fields.as_str(), "")
+                            .to_string();
+
                         write!(writer, "{{{fields}}}")?;
                     }
                 };
