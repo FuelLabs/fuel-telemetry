@@ -221,7 +221,7 @@ impl FileWatcher {
                                 m.as_str(),
                                 "%Y-%m-%dT%H:%M:%S%.9f%Z",
                             )
-                                .ok()
+                            .ok()
                             .map(|dt| dt.and_utc().timestamp_nanos_opt())
                         })
                         .flatten()
@@ -247,7 +247,7 @@ impl FileWatcher {
             .send()?;
 
             if response.status().is_success() {
-                 remove_file(&file)?;
+                remove_file(&file)?;
             }
         }
 

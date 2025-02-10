@@ -385,7 +385,7 @@ where
                             .to_string();
 
                         if !fields.is_empty() {
-                        write!(tmp_writer, "{{{fields}}}")?;
+                            write!(tmp_writer, "{{{fields}}}")?;
                         }
                     }
                 };
