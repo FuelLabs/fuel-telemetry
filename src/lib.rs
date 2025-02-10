@@ -208,6 +208,14 @@ impl TelemetryLayer {
         layer.set_global_default();
         Ok(guard)
     }
+
+    pub fn new_global_default_with_filewatcher() -> Result<WorkerGuard> {
+        let (layer, guard) = Self::new()?;
+        layer.set_global_default();
+        let file_watcher = file_watcher::FileWatcher::new()?;
+        file_watcher.start()?;
+        Ok(guard)
+    }
 }
 
 //
