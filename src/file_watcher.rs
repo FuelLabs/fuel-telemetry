@@ -290,14 +290,13 @@ pub(crate) fn setup_stdio(log_filename: &str) -> Result<()> {
 
     dup2(log_file.as_raw_fd(), 2)?;
 
-    let dev_null_fd = OpenOptions::new()
+    let dev_null = OpenOptions::new()
         .read(true)
         .write(true)
-        .open("/dev/null")?
-        .as_raw_fd();
+        .open("/dev/null")?;
 
-    dup2(dev_null_fd, 0)?;
-    dup2(dev_null_fd, 1)?;
+    dup2(dev_null.as_raw_fd(), 0)?;
+    dup2(dev_null.as_raw_fd(), 1)?;
 
     Ok(())
 }
