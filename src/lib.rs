@@ -14,7 +14,7 @@ use std::{
     sync::LazyLock,
 };
 use sysinfo::System;
-use tracing::{Event, Subscriber};
+use tracing::{span::Entered, Event, Span, Subscriber};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::{
     fmt::{
@@ -29,17 +29,42 @@ use tracing_subscriber::{
 
 pub type Result<T> = std::result::Result<T, TelemetryError>;
 
+/// Define a prelude to minimise a simple API
+pub mod prelude {
+    pub use crate::{
+        debug, error, event, info, span, telemetry_init, trace, warn, Level, TelemetryLayer,
+    };
+}
+
+pub fn telemetry_init() -> Result<()> {
+    static TELEMETRY_INIT: LazyLock<Result<(WorkerGuard, Span)>> = LazyLock::new(|| {
+        let guard = TelemetryLayer::new_global_default_with_filewatcher()?;
+        let main_span = span!(Level::ERROR, "main", telemetry = true);
+        Ok((guard, main_span))
+    });
+
+    static TELEMETRY_MAIN_GUARD: LazyLock<Result<Entered>> = LazyLock::new(|| {
+        let (_, main_span) = TELEMETRY_INIT.as_ref()?;
+        Ok(main_span.enter())
+    });
+
+    TELEMETRY_MAIN_GUARD.as_ref()?;
+
+    Ok(())
+}
+
 /// Re-export tracing macros for convenience
 ///
 /// This module re-exports the following macros from the `tracing` crate:
 ///
-/// - `debug!`
-/// - `error!`
-/// - `event!`
-/// - `info!`
-/// - `span!`
 /// - `trace!`
+/// - `info!`
+/// - `debug!`
 /// - `warn!`
+/// - `error!`
+///
+/// - `event!`
+/// - `span!`
 /// - `Level`
 pub use tracing::{debug, error, event, info, span, trace, warn, Level};
 
