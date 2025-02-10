@@ -60,7 +60,7 @@ fn config() -> Result<&'static FileWatcherConfig> {
             lockfile: Path::new(&telemetry_config()?.fuelup_tmp).join("telemetry-file-watcher.lock"),
             logfile: Path::new(&telemetry_config()?.fuelup_log).join("telemetry-file-watcher.log"),
             rollfile_interval: Duration::from_secs(rollfile_interval),
-            influxdb_token: get_env("INFLUXDB_TOKEN", "rPmdngZVaLX-uWG0mikTVcICJ6Rn0mY42osDFJnWXM7BHLt0bxVQukNSJBhr0T0g4fEy_KxC-zQfyo7ZCqanNg=="),
+            influxdb_token: get_env("INFLUXDB_TOKEN", "JVVqwuRDX-ULJ8sm-56nx5J-Co6npNUcbHICZiB_4uTLIZ2WFZgd2VPbih36SJ6dyRRHl9sPqSw-dOlhYsPeXA=="),
             influxdb_url,
         })
     });
