@@ -52,7 +52,6 @@ fn config() -> Result<&'static FileWatcherConfig> {
                 "INFLUXDB_URL",
                 "https://us-east-1-1.aws.cloud2.influxdata.com"
             ),
-            //get_env("INFLUXDB_ORG", "Dev Team"),
             get_env("INFLUXDB_ORG", "Dev%20Team"),
             get_env("INFLUXDB_BUCKET", "telemetry"),
         );
