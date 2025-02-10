@@ -299,17 +299,28 @@ where
         mut writer: Writer<'_>,
         event: &Event<'_>,
     ) -> std::fmt::Result {
-        let wants_telemetry = ctx.event_scope().into_iter().flatten().any(|span| {
+        let mut wants_telemetry = false;
+
+        for span in ctx.event_scope().into_iter().flatten() {
             if let Some(fields) = span.extensions().get::<FormattedFields<N>>() {
-                if fields.contains("telemetry=false") {
-                    return false;
-                } else if fields.contains("telemetry=true") {
-                    return true;
+                static TELEMETRY_SETTING_REGEX: LazyLock<Result<Regex>> =
+                    LazyLock::new(|| Ok(regex::Regex::new(r"telemetry\s*=\s*(true|false)")?));
+
+                let telemetry_setting = TELEMETRY_SETTING_REGEX
+                    .as_ref()
+                    .ok()
+                    .and_then(|regex| regex.captures(fields.fields.as_str()))
+                    .and_then(|caps| caps.get(1))
+                    .map(|m| m.as_str());
+
+                if let Some("false") = telemetry_setting {
+                    return Ok(());
+                } else if let Some("true") = telemetry_setting {
+                    wants_telemetry = true;
+                    break;
                 }
             }
-
-            false
-        });
+        }
 
         if !wants_telemetry {
             return Ok(());
@@ -339,7 +350,7 @@ where
                     if !fields.is_empty() {
                         static STRIP_TELEMETRY_REGEX: LazyLock<Result<Regex>> =
                             LazyLock::new(|| {
-                                Ok(regex::Regex::new(r"\s*telemetry=(true|false)\s*")?)
+                                Ok(regex::Regex::new(r"\s*telemetry\s*=\s*(true|false)\s*")?)
                             });
 
                         let fields = STRIP_TELEMETRY_REGEX
@@ -348,7 +359,9 @@ where
                             .replace_all(fields.fields.as_str(), "")
                             .to_string();
 
+                        if !fields.is_empty() {
                         write!(tmp_writer, "{{{fields}}}")?;
+                        }
                     }
                 };
 
