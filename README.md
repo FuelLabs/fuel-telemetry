@@ -13,82 +13,17 @@ If a function does not have a `tracing` attribute or has one but does not set
 the `telemetry` field, it will use the currently used `Span` setting if one
 exists. By default, `telemetry=false`.
 
-## Hello World Example
+## Examples
 
-    use forc_telemetry::{TelemetryLayer, error, event, info, span, warn, Level, file_watcher};
+See `examples/*.rs` on the various ways to use `forc-telemetry`.
+
+Note: if you are writing an app and `forc-telemetry` is your only `tracing`
+`Layer`, the easiest way to get going is:
+
+    use forc_telemetry::prelude::*;
 
     fn main() {
-        // Setup `forc-telemetry` as the default tracing subscriber
-        let _tracing_guard = TelemetryLayer::new_global_default().unwrap();
+        telemetry_init().unwrap();
 
-        // Create a `FileWatcher` which submits telemetry to InfluxDB
-        let file_watcher = file_watcher::FileWatcher::new().unwrap();
-        file_watcher.start().unwrap_or_else(|e| {
-            eprintln!("FileWatcher start failed: {e:?}");
-        });
-
-        // Create a `tracing` `Event` outside any `Span` (disabled given telemetry=false)
-        event!(Level::ERROR, "A trace event");
-
-        // Create the root `tracing` `Span`
-        let main_span = span!(Level::ERROR, "main");
-        let _main_guard = main_span.enter();
-
-        // Create `tracing` `Event`s within the `main` `Span` (disabled)
-        info!("An info event");
-        error!("An error event");
-
-        // Create an `ERROR` `tracing` `Event` using the longform method (disabled)
-        event!(Level::ERROR, "An error event");
-
-        // Create a leaf `tracing` `Span` (enabled given telemetry=true)
-        let level1_span = span!(Level::ERROR, "level1", telemetry=true);
-        let _level1_guard = level1_span.enter();
-
-        // Create `tracing` `Event`s within the `main:level1` `Span` (enabled)
-        info!("An info event");
-        error!("An error event");
-
-        // Create an `ERROR` `tracing` `Event` using the longform method (enabled)
-        event!(Level::ERROR, "An error event");
-
-        {
-            // Create a leaf `tracing` `Span` (enabled given telemetry=true)
-            let level2_span = span!(Level::ERROR, "level2", telemetry=true);
-            let _level2_guard = level2_span.enter();
-
-            // Create `tracing` `Event`s within the `main:level1:level2` `Span` (enabled)
-            info!("An info event");
-            error!("An error event");
-        }
-
-        test_a();
-    }
-
-    #[tracing::instrument]
-    fn test_a() {
-        // Create a `tracing` `Event` within the `main:level1:test_a` `Span` (enabled)
-        info!("An info event");
-
-        test_b();
-        test_c();
-    }
-
-    #[tracing::instrument(fields(telemetry=false))]
-    pub fn test_b() {
-        // Create a `tracing` `Event` within the `main:level1:test_b` `Span` (disabled)
-        info!("An info event");
-    }
-
-    #[tracing::instrument(fields(telemetry=false))]
-    pub fn test_c() {
-        // Create a `tracing` `Event` within the `main:level1:test_b:test_c` `Span` (disabled)
-        info!("An info event");
-
-        // Create a leaf `tracing` `Span` (enabled given telemetry=true)
-        let levelc_span = span!(Level::ERROR, "levelc", telemetry=true);
-        let _levelc_guard = levelc_span.enter();
-
-        // Create a `tracing` `Event` within the `main:level1:test_b:test_c:levelc` `Span` (enabled)
-        info!("An info event");
+        info!("This info event will be recorded into InfluxDB");
     }
