@@ -15,7 +15,7 @@ exists. By default, `telemetry=false`.
 
 ## Hello World Example
 
-    use forc_tracing::{TelemetryLayer, error, event, info, span, warn, Level, file_watcher};
+    use forc_telemetry::{TelemetryLayer, error, event, info, span, warn, Level, file_watcher};
 
     fn main() {
         // Setup `forc-telemetry` as the default tracing subscriber
