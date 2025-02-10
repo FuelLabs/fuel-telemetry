@@ -59,7 +59,7 @@ fn config() -> Result<&'static FileWatcherConfig> {
             lockfile: Path::new(&telemetry_config()?.fuelup_tmp).join("telemetry-file-watcher.lock"),
             logfile: Path::new(&telemetry_config()?.fuelup_log).join("telemetry-file-watcher.log"),
             rollfile_interval: Duration::from_secs(rollfile_interval),
-            influxdb_token: get_env("INFLUXDB_TOKEN", "J46wR4W09fdMpS6mJm4pqbbpSYkkmMtJfnvWkZxghC1AluC5T2vgW1u5waLDW24HYIc9r7vJINaYDWeKKHaXrg=="),
+            influxdb_token: get_env("INFLUXDB_TOKEN", "rPmdngZVaLX-uWG0mikTVcICJ6Rn0mY42osDFJnWXM7BHLt0bxVQukNSJBhr0T0g4fEy_KxC-zQfyo7ZCqanNg=="),
             influxdb_url,
         })
     });
@@ -226,15 +226,23 @@ impl FileWatcher {
                 )?);
             }
 
-            RequestBuilder::from_parts(
+
+            if body.is_empty() {
+                continue;
+            }
+
+            let response = RequestBuilder::from_parts(
                 Client::new(),
                 self.request
                     .try_clone()
                     .ok_or(TelemetryError::ReqwestCloneFailed)?,
             )
             .body(body.join("\n"))
-            .send()
-            .map(|_| remove_file(&file))??;
+            .send()?;
+
+            if response.status().is_success() {
+                 remove_file(&file)?;
+            }
         }
 
         Ok(find_telemetry_files()?.is_empty())
