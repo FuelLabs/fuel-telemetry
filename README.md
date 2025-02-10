@@ -81,7 +81,7 @@ exists. By default, `telemetry=false`.
     }
 
     #[tracing::instrument(fields(telemetry=false))]
-    pub fn test_c(num: i32) {
+    pub fn test_c() {
         // Create a `tracing` `Event` within the `main:level1:test_b:test_c` `Span` (disabled)
         info!("An info event");
 
