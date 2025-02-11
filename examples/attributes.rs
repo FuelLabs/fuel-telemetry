@@ -5,7 +5,10 @@ fn main() {
 
     info!("An event with span 'main' is recorded since telemetry_init() sets telemetry=true");
 
-    test_a("This value is recorded".to_string(), "This value is ignored".to_string());
+    test_a(
+        "This value is recorded".to_string(),
+        "This value is ignored".to_string(),
+    );
 }
 
 #[tracing::instrument(fields(telemetry = true), skip(_arg_2))]

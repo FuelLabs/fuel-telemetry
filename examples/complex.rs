@@ -15,25 +15,42 @@ fn main() {
         panic!("FileWatcher start failed: {e:?}");
     });
 
-    event!(Level::ERROR, "An event with no span is ignored since telemetry=false by default");
+    event!(
+        Level::ERROR,
+        "An event with no span is ignored since telemetry=false by default"
+    );
 
     // Create the root `tracing` `Span` (disabled given telemetry=false by default)
     let main_span = span!(Level::INFO, "main");
     let _main_guard = main_span.enter();
 
-    info!("An event with span 'main' is ignored since main's fields sets telemetry=false by default");
-    error!("An event with span 'main' is ignored since main's fields sets telemetry=false by default");
+    info!(
+        "An event with span 'main' is ignored since main's fields sets telemetry=false by default"
+    );
+    error!(
+        "An event with span 'main' is ignored since main's fields sets telemetry=false by default"
+    );
 
-    event!(Level::ERROR, "An event with span 'main' is ignored since main's fields sets telemetry=false by default");
+    event!(
+        Level::ERROR,
+        "An event with span 'main' is ignored since main's fields sets telemetry=false by default"
+    );
 
     // Create a leaf `tracing` `Span` (enabled given the supplied telemetry=true field)
     let level_1_span = span!(Level::INFO, "level_1", telemetry = true);
     let _level_1_guard = level_1_span.enter();
 
-    warn!("An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true");
-    error!("An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true");
+    warn!(
+        "An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true"
+    );
+    error!(
+        "An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true"
+    );
 
-    event!(Level::ERROR, "An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true");
+    event!(
+        Level::ERROR,
+        "An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true"
+    );
 
     {
         // Create a leaf `tracing` `Span` (enabled given level_1's fields sets telemetry=true)
@@ -48,18 +65,20 @@ fn main() {
 }
 
 fn test_a() {
-    info!("An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true");
+    info!(
+        "An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true"
+    );
 
     test_b();
     test_c();
 }
 
-#[tracing::instrument(fields(telemetry=false))]
+#[tracing::instrument(fields(telemetry = false))]
 pub fn test_b() {
     info!("An event with span 'main:level_1:test_b' is ignored since test_b()'s attribute sets telemetry=false");
 }
 
-#[tracing::instrument(fields(telemetry=false))]
+#[tracing::instrument(fields(telemetry = false))]
 pub fn test_c() {
     info!("An event with span 'main:level_1:test_c' is ignored since test_c()'s attribute sets telemetry=false");
 

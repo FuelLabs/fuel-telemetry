@@ -7,7 +7,9 @@ fn main() {
 
     let level_1_span = span!(Level::INFO, "level_1", telemetry = true);
     let _level_1_guard = level_1_span.enter();
-    info!("An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true");
+    info!(
+        "An event with span 'main:level_1' is recorded since level_1's fields sets telemetry=true"
+    );
 
     let level_2_span = span!(Level::INFO, "level_2");
     let _level_2_guard = level_2_span.enter();
