@@ -14,8 +14,12 @@ use std::{
     sync::LazyLock,
 };
 use sysinfo::System;
-use tracing::{span::Entered, Event, Span, Subscriber};
+use tracing::{
+    span::{Entered, Id, Record},
+    Event, Span, Subscriber,
+};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
+use tracing_subscriber::layer::Context;
 use tracing_subscriber::{
     fmt::{
         format::{DefaultFields, FormatEvent, FormatFields, Writer},
@@ -24,7 +28,7 @@ use tracing_subscriber::{
     layer::SubscriberExt,
     registry::LookupSpan,
     util::SubscriberInitExt,
-    Registry,
+    Layer as LayerTrait, Registry,
 };
 
 pub type Result<T> = std::result::Result<T, TelemetryError>;
@@ -240,6 +244,40 @@ impl TelemetryLayer {
         let file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
         Ok(guard)
+    }
+}
+
+impl LayerTrait<Registry> for TelemetryLayer {
+    fn on_close(&self, id: Id, ctx: Context<'_, Registry>) {
+        self.inner.on_close(id, ctx);
+    }
+
+    fn on_enter(&self, id: &span::Id, ctx: Context<'_, Registry>) {
+        self.inner.on_enter(id, ctx);
+    }
+
+    fn on_event(&self, event: &Event<'_>, ctx: Context<'_, Registry>) {
+        self.inner.on_event(event, ctx);
+    }
+
+    fn on_exit(&self, id: &span::Id, ctx: Context<'_, Registry>) {
+        self.inner.on_exit(id, ctx);
+    }
+
+    fn on_id_change(&self, old: &span::Id, new: &span::Id, ctx: Context<'_, Registry>) {
+        self.inner.on_id_change(old, new, ctx);
+    }
+
+    fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, Registry>) {
+        self.inner.on_new_span(attrs, id, ctx);
+    }
+
+    fn on_follows_from(&self, span: &span::Id, follows: &span::Id, ctx: Context<'_, Registry>) {
+        self.inner.on_follows_from(span, follows, ctx);
+    }
+
+    fn on_record(&self, span: &Id, values: &Record<'_>, ctx: Context<'_, Registry>) {
+        self.inner.on_record(span, values, ctx);
     }
 }
 
