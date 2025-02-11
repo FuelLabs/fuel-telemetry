@@ -270,7 +270,7 @@ fn find_telemetry_files() -> Result<Vec<PathBuf>> {
         .filter(|p| p.is_file())
         .filter(|p| p.to_string_lossy().contains(".telemetry."))
         .filter_map(|path| {
-            if path.metadata().ok()?.modified().ok()?.elapsed().ok()? < rollfile_interval {
+            if rollfile_interval < path.metadata().ok()?.modified().ok()?.elapsed().ok()? {
                 Some(Ok(path))
             } else {
                 None
