@@ -354,6 +354,9 @@ where
         let mut buffer = String::new();
         let mut tmp_writer = Writer::new(&mut buffer);
 
+        // We deliberately use fixed .9 digit precision followed by Zulu as
+        // InfluxDB seems to have a few issues with parsing timezones, offsets,
+        // and nanoseconds.
         write!(
             &mut tmp_writer,
             "{} {:>5} {}:{}:{} {}:{}:{} ",

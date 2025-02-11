@@ -217,12 +217,13 @@ impl FileWatcher {
                     event
                         .name("timestamp")
                         .and_then(|m| {
-                            NaiveDateTime::parse_from_str(
-                                m.as_str(),
-                                "%Y-%m-%dT%H:%M:%S%.9f%Z",
-                            )
-                            .ok()
-                            .map(|dt| dt.and_utc().timestamp_nanos_opt())
+                            // Within `lib.rs:format_event()` we deliberately
+                            // stick with Zulu however we use `%Z` format here
+                            // as external apps writing telemetry files may use
+                            // other timezone names
+                            NaiveDateTime::parse_from_str(m.as_str(), "%Y-%m-%dT%H:%M:%S%.9f%Z")
+                                .ok()
+                                .map(|dt| dt.and_utc().timestamp_nanos_opt())
                         })
                         .flatten()
                         .unwrap_or(0),
