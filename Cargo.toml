@@ -11,22 +11,6 @@ description = "A tracing library to implement Fuel telemetry"
 name = "forc_telemetry"
 path = "src/lib.rs"
 
-[[example]]
-name = "simple"
-path = "examples/simple.rs"
-
-[[example]]
-name = "complex"
-path = "examples/complex.rs"
-
-[[example]]
-name = "spans"
-path = "examples/spans.rs"
-
-[[example]]
-name = "attributes"
-path = "examples/attributes.rs"
-
 [dependencies]
 base64 = "0.22"
 chrono = "0.4"
