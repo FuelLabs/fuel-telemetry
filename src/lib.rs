@@ -176,7 +176,7 @@ impl TelemetryLayer {
     /// flush any remaining telemetry to the file.
     ///
     /// ```rust
-    /// use forc_tracing::{TelemetryLayer, info};
+    /// use fuel_tracing::{TelemetryLayer, info};
     ///
     /// let (telemetry_layer, _guard) = TelemetryLayer::new().unwrap();
     /// tracing_subscriber::registry().with(telemetry_layer).init();
@@ -212,12 +212,12 @@ impl TelemetryLayer {
     /// layer-subscriber conflicts between dependency libraries.
     ///
     /// ```rust
-    /// use forc_tracing::{TelemetryLayer, info};
+    /// use fuel_telemetry::{TelemetryLayer, info};
     ///
     /// let (telemetry_layer, _guard) = TelemetryLayer::new().unwrap();
     /// telemetry_layer.set_global_default();
     ///
-    /// info!("Hello from forc_telemetry");
+    /// info!("Hello from fuel_telemetry");
     /// ```
     pub fn set_global_default(self) {
         tracing_subscriber::registry().with(self.inner).init();
@@ -228,7 +228,7 @@ impl TelemetryLayer {
     /// A convenience function to do the create and set within a single step.
     ///
     /// ```rust
-    /// use forc_tracing::TelemetryLayer;
+    /// use fuel_telemetry::TelemetryLayer;
     ///
     /// let _guard = TelemetryLayer::new_global_default().unwrap();
     /// ```
@@ -309,7 +309,7 @@ impl TelemetryFormatter {
     /// and is used to set the `Event` format.
     ///
     /// ```rust
-    /// use forc_tracing::TelemetryFormatter;
+    /// use fuel_telemetry::TelemetryFormatter;
     ///
     /// let telemetry_formatter = TelemetryFormatter::new();
     ///
@@ -354,7 +354,7 @@ where
     /// e.g:
     ///
     /// ```text
-    /// 2021-08-31T14:00:00.000000Z ERROR x86_64-apple-darwin:Arch Linux:6.12.3-arch1-1 forc-tracing:0.1.0:fuelup/src/main.rs root:span1:span2: field1="val1" "A test message"
+    /// 2021-08-31T14:00:00.000000Z ERROR x86_64-apple-darwin:Arch Linux:6.12.3-arch1-1 fuel-telemetry:0.1.0:fuelup/src/main.rs root:span1:span2: field1="val1" "A test message"
     /// ```
     fn format_event(
         &self,

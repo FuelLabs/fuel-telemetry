@@ -1,4 +1,4 @@
-use forc_telemetry::{error, event, file_watcher, info, span, warn, Level, TelemetryLayer};
+use fuel_telemetry::{error, event, file_watcher, info, span, warn, Level, TelemetryLayer};
 
 fn main() {
     // Create a `TelemetryLayer` which is a `tracing` `Layerd` that records telemetry

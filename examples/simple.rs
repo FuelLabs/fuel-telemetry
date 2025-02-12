@@ -1,4 +1,4 @@
-use forc_telemetry::prelude::*;
+use fuel_telemetry::prelude::*;
 
 fn main() {
     // This one-liner hides most of the tracing and telemetry boilerplate code:

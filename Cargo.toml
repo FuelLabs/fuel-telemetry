@@ -1,14 +1,14 @@
 [package]
-name = "forc-telemetry"
+name = "fuel-telemetry"
 version = "0.1.0"
 edition = "2021"
 homepage = "https://fuel.network/"
 license = "Apache-2.0"
-repository = "https://github.com/FuelLabs/forc-telemetry"
+repository = "https://github.com/FuelLabs/fuel-telemetry"
 description = "A tracing library to implement Fuel telemetry"
 
 [lib]
-name = "forc_telemetry"
+name = "fuel_telemetry"
 path = "src/lib.rs"
 
 [dependencies]

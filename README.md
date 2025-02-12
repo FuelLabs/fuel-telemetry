@@ -1,7 +1,7 @@
 
-# Forc Telemetry
+# Fuel Telemetry
 
-The `forc-telemetry` crate is a `tracing` `Layer` used to implement Telemetry within our libraries and apps.
+The `fuel-telemetry` crate is a `tracing` `Layer` used to implement Telemetry within our libraries and apps.
 
 Each `tracing` `Event` is either "enabled" or "disabled" based on the current
 `Span`'s setting. There are 2 ways to set this:
@@ -15,12 +15,12 @@ exists. By default, `telemetry=false`.
 
 ## Examples
 
-See `examples/*.rs` on the various ways to use `forc-telemetry`.
+See `examples/*.rs` on the various ways to use `fuel-telemetry`.
 
-Note: if you are writing an app and `forc-telemetry` is your only `tracing`
+Note: if you are writing an app and `fuel-telemetry` is your only `tracing`
 `Layer`, the easiest way to get going is:
 
-    use forc_telemetry::prelude::*;
+    use fuel::prelude::*;
 
     fn main() {
         telemetry_init().unwrap();

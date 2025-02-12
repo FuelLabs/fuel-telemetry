@@ -1,4 +1,4 @@
-use forc_telemetry::prelude::*;
+use fuel_telemetry::prelude::*;
 
 fn main() {
     telemetry_init().unwrap();

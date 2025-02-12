@@ -1,4 +1,4 @@
-use forc_telemetry::{file_watcher::FileWatcher, prelude::*};
+use fuel_telemetry::{file_watcher::FileWatcher, prelude::*};
 use tracing_subscriber::prelude::*;
 
 fn main() {

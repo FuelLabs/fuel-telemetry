@@ -1,10 +1,10 @@
-# `forc-telemetry` Architecture Design
+# `fuel-telemetry` Architecture Design
 
-This document describes the `forc-telemetry` architectural design using the [C4 Model](https://c4model.com/).
+This document describes the `fuel-telemetry` architectural design using the [C4 Model](https://c4model.com/).
 
 ### Level 1: Context Diagram
 
-The Context Diagram provides a high-level overview of `forc-telemetry`, its users, and its interactions with external systems.
+The Context Diagram provides a high-level overview of `fuel-telemetry`, its users, and its interactions with external systems.
 
 ```mermaid
 graph TD
@@ -19,8 +19,8 @@ graph TD
     E[Non-Rust Binaries]
   end
 
-  subgraph forc-telemetry
-    F[forc_telemetry API]
+  subgraph fuel-telemetry
+    F[fuel_telemetry API]
     G[FileWatcher]
     H[ProcessWatcher]
     I[SystemInfoWatcher]
@@ -40,7 +40,7 @@ graph TD
   D -->|Creates tracing subscriber| F
 
   F -->|"Starts FileWatcher<br />automatically via<br />telemetry_init()"| G
-  E -->|"Writes telemetry files<br />via language libraries<br />then starts FileWatcher<br />via forc-telemetry binary"| G
+  E -->|"Writes telemetry files<br />via language libraries<br />then starts FileWatcher<br />via fuel-telemetry binary"| G
   D -->|"Starts FileWatcher<br />manually via<br />start()"| G
 
   G -->|Connects to| J
@@ -50,13 +50,13 @@ graph TD
 
 ### Level 2: Container Diagram
 
-The Container Diagram shows the main containers of `forc-telemetry` and their interactions.
+The Container Diagram shows the main containers of `fuel-telemetry` and their interactions.
 
 ```mermaid
 graph TD
-  subgraph forc-telemetry
+  subgraph fuel-telemetry
     A[Externally created<br />telemetry files]
-    B[forc_telemetry API]
+    B[fuel_telemetry API]
     C[FileWatcher]
     D[ProcessWatcher]
     E[SystemInfoWatcher]
@@ -84,8 +84,8 @@ The Component Diagram breaks down each container into its individual components 
 
 ```mermaid
 graph TD
-  subgraph forc-telemetry
-    A[forc_telemetry API]
+  subgraph fuel-telemetry
+    A[fuel_telemetry API]
     B[FileWatcher]
     C[ProcessWatcher]
     D[SystemInfoWatcher]
