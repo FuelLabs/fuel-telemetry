@@ -29,15 +29,24 @@ use std::{
 // Module config
 //
 
+/// Configuration for `FileWatcher`
 #[derive(Debug, Clone)]
 struct FileWatcherConfig {
+    // The path to its lockfile
     lockfile: PathBuf,
+    // The path to its logfile
     logfile: PathBuf,
-    rollfile_interval: Duration,
-    influxdb_url: String,
+    // The token to use to authenticate with InfluxDB
     influxdb_token: String,
+    // The URL of the InfluxDB instance
+    influxdb_url: String,
+    // The interval to poll for aged-out telemetry files
+    poll_interval: Duration,
 }
 
+/// Get the `FileWatcher` configuration
+///
+/// This function returns the `'static` `FileWatcher` configuration.
 fn config() -> Result<&'static FileWatcherConfig> {
     static FILEWATCHER_CONFIG: LazyLock<Result<FileWatcherConfig>> = LazyLock::new(|| {
         let get_env = |key, default| EnvSetting::new(key, default).get();
@@ -46,6 +55,7 @@ fn config() -> Result<&'static FileWatcherConfig> {
             .parse()
             .map_err(TelemetryError::InvalidRollfileInterval)?;
 
+        // Format the InfluxDB URL (the org name needs to be URL-encoded)
         let influxdb_url = format!(
             "{}/api/v2/write?org={}&bucket={}&precision=ns",
             get_env(
@@ -74,11 +84,15 @@ fn config() -> Result<&'static FileWatcherConfig> {
 // FileWatcher implementation
 //
 
+/// A `FileWatcher` polls for aged-out telemetry files and sends them to InfluxDB
 pub struct FileWatcher {
+    // A cached request to send to InfluxDB
     request: Request,
+    // The path to its lockfile ($FUELUP_TMP/telemetry-file-watcher.lock)
     lockfile_path: PathBuf,
 }
 
+/// A regex to parse telemetry events
 static TELEMETRY_EVENT_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
     Ok(Regex::new(
         r"(?x)
@@ -93,7 +107,14 @@ static TELEMETRY_EVENT_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
     )?)
 });
 
-// document this
+/// A regex to parse telemetry payloads
+///
+/// Event payloads have the following formats:
+///
+/// ```text
+/// - <message_only>
+/// - [<span1>:<span2>:...:] [<message>] [<left1>= <right1> <left2>= <right2> ...]
+/// ```
 static TELEMETRY_PAYLOAD_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
     Ok(Regex::new(
         r"(?x)
@@ -106,7 +127,9 @@ static TELEMETRY_PAYLOAD_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
 });
 
 impl FileWatcher {
+    /// Create a new `FileWatcher`
     pub fn new() -> Result<Self> {
+        // Cache the InfluxDB request since it won't change between calls
         let request = Client::new()
             .post(&config()?.influxdb_url)
             .header("Content-Type", "text/plain; charset=utf-8")
@@ -124,17 +147,28 @@ impl FileWatcher {
         })
     }
 
+    /// Start the `FileWatcher`
+    ///
+    /// This function forks and has the parent immediately return. The forked
+    /// off child then daemonises to poll for aged-out telemetry files, sending
+    /// them to InfluxDB, and exits once there are no more files to process.
     pub fn start(&self) -> Result<()> {
         if var("FUELUP_NO_TELEMETRY").is_ok() {
+            // If telemetry is disabled, immediately return
             return Ok(());
         }
 
         if daemonise()? {
+            // If we are the parent, immediately return
             return Ok(());
         }
 
         loop {
+            // Enforce a singleton to ensure we are the only process submitting
+            // telemetry to InfluxDB
             let _lock = enforce_singleton(&self.lockfile_path)?;
+
+            // Poll for aged-out telemetry files
             let no_files_left = self.poll_directory()?;
 
             if no_files_left {
@@ -145,6 +179,7 @@ impl FileWatcher {
         }
     }
 
+    /// Poll for aged-out telemetry files
     fn poll_directory(&self) -> Result<bool> {
         for file in find_telemetry_files()? {
             let locked_file = Flock::lock(
@@ -153,6 +188,7 @@ impl FileWatcher {
             )
             .map_err(|(_, e)| e)?;
 
+            // Read the telemetry file line by line
             let mut body = Vec::new();
             let lines = BufReader::new(locked_file.try_clone()?)
                 .lines()
@@ -160,13 +196,17 @@ impl FileWatcher {
                 .collect::<Result<Vec<_>>>()?;
 
             for base64_line in lines {
+                // First, decode the Base64 line
                 let decoded_line = STANDARD.decode(base64_line.as_bytes())?;
                 let line = String::from_utf8(decoded_line)?;
+
+                // Parse the line for a telemetry event
                 let event = TELEMETRY_EVENT_REGEX
                     .as_ref()?
                     .captures(&line)
                     .ok_or_else(|| TelemetryError::InvalidTracingEvent(line.clone()))?;
 
+                // Parse the payload from the telemetry event
                 let payload = event.name("payload").ok_or_else(|| {
                     TelemetryError::InvalidTracingPayload(
                         event
@@ -178,6 +218,7 @@ impl FileWatcher {
                 let (mut spans_long, mut spans_short, mut fields) =
                     (vec![], vec![], HashMap::new());
 
+                // Finally, parse the span from the payload
                 for capture in TELEMETRY_PAYLOAD_REGEX
                     .as_ref()?
                     .captures_iter(payload.into())
@@ -198,6 +239,7 @@ impl FileWatcher {
                     }
                 }
 
+                // Build the LineProtocol to send to InfluxDB
                 let mut line_protocol_builder = LineProtocolBuilder::new()
                     .measurement(event.name("crate_pkg_name").map_or("", |m| m.as_str()))
                     .tag(
@@ -213,6 +255,9 @@ impl FileWatcher {
                     line_protocol_builder = line_protocol_builder.field(key, value.as_str());
                 }
 
+                // Set the timestamp of the LineProtocol. Here we force a `.9`
+                // decimal format rather than use the default nanoseconds format
+                // as InfluxDB seems to have issues parsing datetime data
                 let line_protocol_builder = line_protocol_builder.timestamp(
                     event
                         .name("timestamp")
@@ -238,6 +283,7 @@ impl FileWatcher {
                 continue;
             }
 
+            // Send LineProtocol to InfluxDB
             let response = RequestBuilder::from_parts(
                 Client::new(),
                 self.request
@@ -248,6 +294,7 @@ impl FileWatcher {
             .send()?;
 
             if response.status().is_success() {
+                // Only remove the telemetry file if successful
                 remove_file(&file)?;
             }
         }
@@ -264,6 +311,9 @@ fn find_telemetry_files() -> Result<Vec<PathBuf>> {
     let rollfile_interval = config()?.rollfile_interval;
     let telemetry_dir = &telemetry_config()?.fuelup_tmp;
 
+    // Filter out files not containing `.telemetry.` in the filename
+    //
+    // Also, ignore file age if `ignore_age` is true
     read_dir(telemetry_dir)?
         .filter_map(std::result::Result::ok)
         .map(|e| e.path())
@@ -279,6 +329,8 @@ fn find_telemetry_files() -> Result<Vec<PathBuf>> {
         .collect::<Result<Vec<_>>>()
 }
 
+/// Enforce a singleton to ensure we are the only `FileWatcher` running and
+/// submitting telemetry to InfluxDB
 fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
     let lockfile = OpenOptions::new()
         .create(true)
@@ -288,7 +340,7 @@ fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
     let lock = match Flock::lock(lockfile.try_clone()?, FlockArg::LockExclusiveNonblock) {
         Ok(lock) => lock,
         Err((_, Errno::EWOULDBLOCK)) => {
-            // Silently exit as another FileWatcher is already running
+            // Silently exit as another running `FileWatcher` was found
             exit(0);
         }
         Err((_, e)) => return Err(TelemetryError::from(e)),
@@ -297,35 +349,22 @@ fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
     Ok(lock)
 }
 
-pub(crate) fn setup_stdio(log_filename: &str) -> Result<()> {
-    let log_file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_filename)?;
-
-    dup2(log_file.as_raw_fd(), 2)?;
-
-    let dev_null = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open("/dev/null")?;
-
-    dup2(dev_null.as_raw_fd(), 0)?;
-    dup2(dev_null.as_raw_fd(), 1)?;
-
-    Ok(())
-}
-
+/// Daemonise the current process
+///
+/// This function forks and has the parent immediately return. The forked off
+/// child then follows the common "double-fork" method of daemonising.
 fn daemonise() -> Result<bool> {
     stdout().flush()?;
     stderr().flush()?;
 
+    // Return if we are the parent
     if unsafe { fork()? }.is_parent() {
         return Ok(true);
     };
 
-    // To prevent us from becoming a zombie when we die, we kill the parent to
-    // become the child so that we are automatically reaped by init or systemd
+    // To prevent us from becoming a zombie when we die, we fork then kill the
+    // parent so that we are immediately inherited by init/systemd. Doing so, we
+    // are guaranteed to be reaped on exit.
     //
     // Also, doing this guarantees that we are not the group leader, which is
     // required to create a new session (i.e setsid() will fail otherwise)
@@ -343,6 +382,8 @@ fn daemonise() -> Result<bool> {
         exit(0);
     }
 
+    // Setup stdio to write errors to the logfile while discarding any IO to
+    // the controlling terminal
     setup_stdio(
         Path::new(&telemetry_config()?.fuelup_tmp)
             .join(config()?.logfile.clone())
@@ -377,4 +418,30 @@ fn daemonise() -> Result<bool> {
     stat::umask(stat::Mode::empty());
 
     Ok(false)
+}
+
+/// Setup stdio for the `FileWatcher`
+///
+/// This function redirects stderr to its logfile while discarding any IO to the
+/// controlling terminal.
+pub(crate) fn setup_stdio(log_filename: &str) -> Result<()> {
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_filename)?;
+
+    // Redirect stderr to the logfile
+    dup2(log_file.as_raw_fd(), 2)?;
+
+    // Get a filehandle to /dev/null
+    let dev_null = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("/dev/null")?;
+
+    // Redirect stdin, stdout to /dev/null
+    dup2(dev_null.as_raw_fd(), 0)?;
+    dup2(dev_null.as_raw_fd(), 1)?;
+
+    Ok(())
 }

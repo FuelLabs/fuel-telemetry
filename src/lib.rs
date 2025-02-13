@@ -34,12 +34,45 @@ use tracing_subscriber::{
 pub type Result<T> = std::result::Result<T, TelemetryError>;
 
 /// Define a prelude to minimise a simple API
+///
+/// Exports the following names:
+///
+/// - `telemetry_init`
+/// - `TelemetryLayer`
+///
+/// - `trace!`
+/// - `debug!`
+/// - `info!`
+/// - `warn!`
+/// - `error!`
+///
+/// - `event!`
+/// - `span!`
+/// - `Level`
 pub mod prelude {
     pub use crate::{
         debug, error, event, info, span, telemetry_init, trace, warn, Level, TelemetryLayer,
     };
 }
 
+/// Convenience function to do everything needed for telemetry in one step
+///
+/// This function does the following:
+/// - Creates a new `TelemetryLayer` `tracing` `Layer`
+/// - Sets it as the global default `tracing` `Subscriber`
+/// - Creates the root `span` called "main"
+/// - Enters the "main" `span`
+/// - Create a `FileWatcher` and starts it
+///
+/// Warning: this function should only be called in applications and not within
+/// libraries as it sets the global default subscriber, clobbering any set by
+/// the application.
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// telemetry_init()?;
+/// ```
 pub fn telemetry_init() -> Result<()> {
     static TELEMETRY_INIT: LazyLock<Result<(WorkerGuard, Span)>> = LazyLock::new(|| {
         let guard = TelemetryLayer::new_global_default_with_filewatcher()?;
@@ -76,11 +109,26 @@ pub use tracing::{debug, error, event, info, span, trace, warn, Level};
 // Crate static configuration
 //
 
+/// Telemetry's global configuration
+///
+/// This struct contains the configuration for telemetry, to be used here and
+/// within its underlying modules.
 pub struct TelemetryConfig {
+    // The path to the fuelup tmp directory
     fuelup_tmp: String,
+    // The path to the fuelup log directory
     fuelup_log: String,
 }
 
+/// Get the global telemetry configuration
+///
+/// This function returns the global `'static` telemetry configuration.
+///
+/// ```rust
+/// use fuel_telemetry::telemetry_config;
+///
+/// let telemetry_config = telemetry_config()?;
+/// ```
 pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
     pub static TELEMETRY_CONFIG: LazyLock<Result<TelemetryConfig>> = LazyLock::new(|| {
         let fuelup_home_env = EnvSetting {
@@ -98,6 +146,8 @@ pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
             default: "log",
         };
 
+        // Tries to set the fuelup home directory from the environment, falling
+        // back to the $HOME/.fuelup
         let fuelup_home = var_os(fuelup_home_env.name)
             .map(PathBuf::from)
             .or_else(|| home_dir().map(|dir| dir.join(fuelup_home_env.default)))
@@ -106,6 +156,8 @@ pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
             .into_string()
             .map_err(|e| TelemetryError::InvalidHomeDir(e.to_string_lossy().into()))?;
 
+        // Tries to set the fuelup tmp directory from the environment, falling
+        // back to $FUELUP_HOME/tmp
         let fuelup_tmp = var_os(fuelup_tmp_env.name)
             .unwrap_or_else(|| {
                 PathBuf::from(fuelup_home.clone())
@@ -115,6 +167,8 @@ pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
             .into_string()
             .map_err(|e| TelemetryError::InvalidTmpDir(e.to_string_lossy().into()))?;
 
+        // Tries to set the fuelup log directory from the environment, falling
+        // back to $FUELUP_HOME/log
         let fuelup_log = var_os(fuelup_log_env.name)
             .unwrap_or_else(|| {
                 PathBuf::from(fuelup_home.clone())
@@ -124,6 +178,7 @@ pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
             .into_string()
             .map_err(|e| TelemetryError::InvalidLogDir(e.to_string_lossy().into()))?;
 
+        // Create the fuelup tmp and log directories if they don't exist
         create_dir_all(&fuelup_tmp)?;
         create_dir_all(&fuelup_log)?;
 
@@ -138,16 +193,38 @@ pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
         .map_err(|e| TelemetryError::InvalidConfig(e.to_string()))
 }
 
+/// A helper struct to get environment variables with a default value
 pub struct EnvSetting {
+    /// The name of the environment variable
     name: &'static str,
+    /// The default value of the environment variable
     default: &'static str,
 }
 
 impl EnvSetting {
+    /// Creates a new `EnvSetting`
+    ///
+    /// This function creates a new `EnvSetting` with the given name and default value.
+    ///
+    /// ```rust
+    /// use fuel_telemetry::EnvSetting;
+    ///
+    /// let env_setting = EnvSetting::new("FUELUP_HOME", ".fuelup");
+    /// ```
     pub fn new(name: &'static str, default: &'static str) -> Self {
         Self { name, default }
     }
 
+    /// Gets the environment variable with a default value
+    ///
+    /// This function gets the environment variable with a default value.
+    ///
+    /// ```rust
+    /// use fuel_telemetry::EnvSetting;
+    ///
+    /// let env_setting = EnvSetting::new("FUELUP_HOME", ".fuelup");
+    /// let fuelup_home = env_setting.get();
+    /// ```
     pub fn get(&self) -> String {
         var(self.name).unwrap_or_else(|_| self.default.to_string())
     }
@@ -167,7 +244,7 @@ pub struct TelemetryLayer {
 }
 
 impl TelemetryLayer {
-    /// Creates a new `TelemetryLayer`.
+    /// Create a new `TelemetryLayer`.
     ///
     /// This `tracing` `Layer` is to be used along with the `tracing` crate, and
     /// composess with other `Layer`s to create a subscriber.
@@ -175,8 +252,13 @@ impl TelemetryLayer {
     /// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will
     /// flush any remaining telemetry to the file.
     ///
+    /// Warning: this function does not create a `FileWatcher` and so although
+    /// telemetry files will be written to disk when `telemetry=true` for a
+    /// span, they will not be sent to InfluxDB
+    ///
     /// ```rust
-    /// use fuel_tracing::{TelemetryLayer, info};
+    /// use fuel_telemetry::TelemetryLayer;
+    /// use tracing_subscriber::prelude::*;
     ///
     /// let (telemetry_layer, _guard) = TelemetryLayer::new().unwrap();
     /// tracing_subscriber::registry().with(telemetry_layer).init();
@@ -186,8 +268,12 @@ impl TelemetryLayer {
     pub fn new() -> Result<(Self, WorkerGuard)> {
         let (writer, guard) = {
             if var("FUELUP_NO_TELEMETRY").is_ok() {
+                // If telemetry is disabled, discards all output
                 tracing_appender::non_blocking(std::io::sink())
             } else {
+                // If telemetry is enabled, telemetry will be written to a file
+                // that is rotated hourly with the filename format:
+                // "$FUELUP_TMP/<crate>.telemetry.YYYY-MM-DD-HH"
                 tracing_appender::non_blocking(tracing_appender::rolling::hourly(
                     PathBuf::from(telemetry_config()?.fuelup_tmp.clone()),
                     format!("{}.telemetry", env!("CARGO_CRATE_NAME")),
@@ -195,6 +281,7 @@ impl TelemetryLayer {
             }
         };
 
+        // We need to disable ANSI codes as it breaks InfluxDB parsing
         let inner = tracing_subscriber::fmt::layer()
             .with_writer(writer)
             .with_ansi(false)
@@ -208,16 +295,14 @@ impl TelemetryLayer {
     /// This function sets the `TelemetryLayer` as the global default subscriber
     /// for all tracing events within the thread.
     ///
-    /// Note: this should only be used within binaries so that there are no
-    /// layer-subscriber conflicts between dependency libraries.
+    /// Warning: this function should only be called in applications and not
+    /// within libraries as it will clobber any set by the application.
     ///
     /// ```rust
-    /// use fuel_telemetry::{TelemetryLayer, info};
+    /// use fuel_telemetry::TelemetryLayer;
     ///
     /// let (telemetry_layer, _guard) = TelemetryLayer::new().unwrap();
     /// telemetry_layer.set_global_default();
-    ///
-    /// info!("Hello from fuel_telemetry");
     /// ```
     pub fn set_global_default(self) {
         tracing_subscriber::registry().with(self.inner).init();
@@ -247,6 +332,9 @@ impl TelemetryLayer {
     }
 }
 
+// Implement the `Layer` trait for `TelemetryLayer`
+//
+// Here we simply proxy calls to the inner layer.
 impl LayerTrait<Registry> for TelemetryLayer {
     fn on_close(&self, id: Id, ctx: Context<'_, Registry>) {
         self.inner.on_close(id, ctx);
@@ -297,8 +385,11 @@ impl LayerTrait<Registry> for TelemetryLayer {
 /// - `file`: the file where the event was generated
 ///
 struct TelemetryFormatter {
+    // Caches the system triple used for every event
     triple: String,
+    // Caches the operating system name used for every event
     os: String,
+    // Caches the operating system version used for every event
     os_version: String,
 }
 
@@ -317,6 +408,7 @@ impl TelemetryFormatter {
     ///     .event_format(telemetry_formatter);
     /// ```
     pub fn new() -> Self {
+        // Cache the values we'll use for every event
         Self {
             os: System::name().unwrap_or_default(),
             os_version: System::kernel_version().unwrap_or_default(),
@@ -364,8 +456,16 @@ where
     ) -> std::fmt::Result {
         let mut wants_telemetry = false;
 
+        // Check if the event wants telemetry enabled
+        //
+        // Going from leaf span to the root, we check if any of the spans have a
+        // `telemetry` field set to `false`. If so, short-circuit return.
+        //
+        // If a `telemetry` field is set to `true`, we set the `wants_telemetry`
+        // flag to `true` and then break.
         for span in ctx.event_scope().into_iter().flatten() {
             if let Some(fields) = span.extensions().get::<FormattedFields<N>>() {
+                // A regex to parse the `telemetry` field from the span's fields
                 static TELEMETRY_SETTING_REGEX: LazyLock<Result<Regex>> =
                     LazyLock::new(|| Ok(regex::Regex::new(r"telemetry\s*=\s*(true|false)")?));
 
@@ -389,6 +489,8 @@ where
             return Ok(());
         }
 
+        // Use a temporary buffer as the writer for the event, then at the end
+        // we Base64 encode the buffer and write it to passed-in writer.
         let mut buffer = String::new();
         let mut tmp_writer = Writer::new(&mut buffer);
 
@@ -408,12 +510,14 @@ where
             event.metadata().file().unwrap_or("unknown"),
         )?;
 
+        // For each span in the event, write out the span its fields to the temporary writer
         if let Some(scope) = ctx.event_scope() {
             for span in scope.from_root() {
                 write!(tmp_writer, "{}", span.name())?;
 
                 if let Some(fields) = span.extensions().get::<FormattedFields<N>>() {
                     if !fields.is_empty() {
+                        // Strip the telemetry field from the outputted fields
                         static STRIP_TELEMETRY_REGEX: LazyLock<Result<Regex>> =
                             LazyLock::new(|| {
                                 Ok(regex::Regex::new(r"\s*telemetry\s*=\s*(true|false)\s*")?)
@@ -437,9 +541,11 @@ where
             write!(tmp_writer, " ")?;
         }
 
+        // Call out to the default field formatter with the temporary writer
         ctx.field_format()
             .format_fields(tmp_writer.by_ref(), event)?;
 
+        // Base64 encode the temporary buffer before writing it to the output writer
         let encoded = STANDARD.encode(&buffer);
         writer.write_str(&encoded)?;
         writer.write_str("\n")

@@ -49,11 +49,20 @@ pub enum TelemetryError {
     InvalidTracingPayload(String),
 }
 
+/// Convenience impl that dereferences the error
+/// so that we can use the error with `?`
 impl From<&TelemetryError> for TelemetryError {
     fn from(err: &TelemetryError) -> Self {
         err.clone()
     }
 }
+
+//
+// The following impls are convenience impls that convert errors into our
+// `TelemetryError` variant. We do this because we want to use the `?` operator
+// and can't use `?` directly because the source errors don't implement
+// `Clone`.
+//
 
 impl From<FromUtf8Error> for TelemetryError {
     fn from(err: FromUtf8Error) -> Self {
