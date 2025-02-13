@@ -13,7 +13,8 @@ fn main() {
 
 #[tracing::instrument(fields(telemetry = true), skip(_arg_2))]
 fn test_a(arg_1: String, _arg_2: String) {
-    info!("An event with span 'main:test_a' is recorded along with the value of arg_1, while _arg_2 is not recorded");
+    info!("An event with span 'main:test_a' is recorded along with the value of arg_1 since \
+           test_a()'s attribute sets telemetry=true, while _arg_2 is not recorded");
 
     test_b();
     test_c();
@@ -42,5 +43,8 @@ pub fn test_e(answer: u8) {
 
 #[tracing::instrument(fields(telemetry = true))]
 pub fn test_f(answer: u8) {
-    info!("An event with span 'main:test_a:test_e' is recorded along with the value of _anwser since test_e()'s attribute sets telemetry=false");
+    info!(
+        "An event with span 'main:test_a:test_f' is recorded along with the \
+        name and value of `anwser` since test_f()'s attribute sets telemetry=true"
+    );
 }

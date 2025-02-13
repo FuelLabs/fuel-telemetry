@@ -1,18 +1,16 @@
 use fuel_telemetry::prelude::*;
 
 fn main() {
-    // This one-liner hides most of the tracing and telemetry boilerplate code:
-    // - Sets `TelemetryLayer` as the default `tracing` `Subscriber`
-    // - Creates the root `Span` with the following settings:
-    //     - name: `main`
-    //     - level: `Level::ERROR`
-    //     - telemetry: true
-    // - Starts a `FileWatcher` to poll the filesystem for aged-out telemetry
-    //   files and then submit them to InfluxDB
-
+    // This convenience function hides most of the tracing and telemetry
+    // boilerplate code:
+    //
+    // - Creates a new `TelemetryLayer` `tracing` `Layer`
+    // - Sets it as the global default `tracing` `Subscriber`
+    // - Creates the root `span` called "main"
+    // - Enters the "main" `span`
+    // - Create a `FileWatcher` and starts it
     telemetry_init().unwrap();
 
-    // Create a tracing `Span` that will also be submitted to InfluxDB
     info!("An event with span 'main' is recorded since telemetry_init() sets telemetry=true");
 
     test_a();
@@ -27,7 +25,8 @@ fn main() {
 //
 // To hide sensitive function parameters from being recorded, the skip attribute parameter can be used:
 // `#[tracing::instrument(fields(telemetry = true), skip(<sensitive_parameter_name>))]`
-
+//
+// Here however, we are setting `telemetry=false` so `Event`s will be ignored.
 #[tracing::instrument(fields(telemetry = false))]
 fn test_a() {
     info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
@@ -51,7 +50,7 @@ pub fn test_c() {
 }
 
 pub fn test_d() {
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=true");
+    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
 }
 
 #[tracing::instrument(fields(telemetry = false))]

@@ -1,9 +1,9 @@
-use fuel_telemetry::{file_watcher::FileWatcher, prelude::*};
+use fuel_telemetry::prelude::*;
 use tracing_subscriber::prelude::*;
 
 fn main() {
     // Create a `Telemetry` `Layer` and its drop guard
-    let (telemetry_layer, _guard) = TelemetryLayer::new().unwrap();
+    let (telemetry_layer, _guard) = TelemetryLayer::new_with_filewatcher().unwrap();
 
     // Create a stdout `Layer`
     let stdout_layer = tracing_subscriber::fmt::layer().with_writer(std::io::stdout);
@@ -13,16 +13,13 @@ fn main() {
         .with(telemetry_layer)
         .with(stdout_layer);
 
-    // Set our subscriber as the default global subscriber, which contains two
-    // tracing `Layers`:
+    // Set our subscriber as the default global subscriber, which contains the
+    // above two tracing `Layers`:
     // - `TelemetryLayer` events will appear within InfluxDB
-    // - `stdout_layer` will print all events to stdout
+    // - `stdout_layer` will print events to stdout
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
-    // Start a `FileWatcher` which will send files to InfluxDB
-    FileWatcher::new().unwrap().start().unwrap();
-
-    info!("An event with span 'main' is recorded since telemetry_init() sets telemetry=true");
+    info!("An event with span 'main' is ignored since telemetry=false by default");
 
     test_a();
 }
@@ -47,7 +44,7 @@ pub fn test_c() {
 }
 
 pub fn test_d() {
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=true");
+    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
 }
 
 #[tracing::instrument(fields(telemetry = false))]

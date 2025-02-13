@@ -1,4 +1,4 @@
-use fuel_telemetry::{error, event, file_watcher, info, span, warn, Level, TelemetryLayer};
+use fuel_telemetry::{prelude::*, file_watcher};
 
 fn main() {
     // Create a `TelemetryLayer` which is a `tracing` `Layerd` that records telemetry
@@ -7,7 +7,7 @@ fn main() {
     // Set `telemetry_layer` as the default tracing subscriber
     telemetry_layer.set_global_default();
 
-    // Create a `FileWatcher` which submits telemetry to InfluxDB
+    // Create a `FileWatcher` to submit telemetry to InfluxDB
     let file_watcher = file_watcher::FileWatcher::new().unwrap();
 
     // Start the `FileWatcher`
@@ -86,5 +86,5 @@ pub fn test_c() {
     let level_c_span = span!(Level::INFO, "level_c", telemetry = true);
     let _level_c_guard = level_c_span.enter();
 
-    error!("An event with span 'main:level_1:level_c' is recorded since level_c's fields sets telemetry=true");
+    error!("An event with span 'main:level_1:test_c:level_c' is recorded since level_c's fields sets telemetry=true");
 }
