@@ -148,3 +148,8 @@ default, we can force files to age out early so they are instantly submitted
 with the following:
 
     touch -t 20250101 ~/.fuelup/tmp/*.telemetry.*
+
+### Architectural Design
+
+To get an overview of how `fuel-telemetry` works, the Architectural Design can
+be found in `docs/architecture.md`
