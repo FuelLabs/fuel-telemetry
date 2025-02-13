@@ -308,9 +308,32 @@ impl TelemetryLayer {
         tracing_subscriber::registry().with(self.inner).init();
     }
 
-    /// Create a `TelemetryLayer` and sets it as the global default subscriber.
+    /// A convenience function to do `new()` followed by creating and starting a
+    /// `FileWatcher` within a single step.
     ///
-    /// A convenience function to do the create and set within a single step.
+    /// ```rust
+    /// use fuel_telemetry::TelemetryLayer;
+    /// use tracing_subscriber::prelude::*;
+    ///
+    /// let (telemetry_layer, _guard) = TelemetryLayer::new_with_filewatcher()?;
+    /// tracing_subscriber::registry().with(telemetry_layer).init();
+    /// ```
+    pub fn new_with_filewatcher() -> Result<(Self, WorkerGuard)> {
+        let (layer, guard) = Self::new()?;
+        let file_watcher = file_watcher::FileWatcher::new()?;
+        file_watcher.start()?;
+        Ok((layer, guard))
+    }
+
+    /// A convenience function to do `new()` and `set_global_default()` within a
+    /// single step.
+    ///
+    /// Warning: this function should only be called in applications and not
+    /// within libraries as it will clobber any set by the application.
+    ///
+    /// Warning: this function does not create a `FileWatcher` and so although
+    /// telemetry files will be written to disk, they will not be sent to
+    /// InfluxDB
     ///
     /// ```rust
     /// use fuel_telemetry::TelemetryLayer;
@@ -323,9 +346,19 @@ impl TelemetryLayer {
         Ok(guard)
     }
 
+    /// A convenience function to do `new_global_default()` followed by creating
+    /// and starting a `FileWatcher` within a single step.
+    ///
+    /// Warning: this function should only be called in applications and not
+    /// within libraries as it will clobber any set by the application.
+    ///
+    /// ```rust
+    /// use fuel_telemetry::TelemetryLayer;
+    ///
+    /// let _guard = TelemetryLayer::new_global_default_with_filewatcher()?;
+    /// ```
     pub fn new_global_default_with_filewatcher() -> Result<WorkerGuard> {
-        let (layer, guard) = Self::new()?;
-        layer.set_global_default();
+        let guard = Self::new_global_default()?;
         let file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
         Ok(guard)
