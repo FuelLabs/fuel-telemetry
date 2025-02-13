@@ -183,7 +183,8 @@ impl FileWatcher {
 
     /// Poll for aged-out telemetry files
     fn poll_directory(&self) -> Result<bool> {
-        for file in find_telemetry_files()? {
+        for file in find_telemetry_files(true)? {
+            // Lock the telemetry file to prevent being submitted twice
             let locked_file = Flock::lock(
                 OpenOptions::new().read(true).open(&file)?,
                 FlockArg::LockExclusiveNonblock,
@@ -301,7 +302,10 @@ impl FileWatcher {
             }
         }
 
-        Ok(find_telemetry_files()?.is_empty())
+        // Return true if there are pending telemetry files to process
+        // regardless of age so that we keep going until there's no more work to
+        // be done
+        Ok(find_telemetry_files(true)?.is_empty())
     }
 }
 
@@ -309,8 +313,14 @@ impl FileWatcher {
 // Helper functions that might be moved later to lib.rs
 //
 
-fn find_telemetry_files() -> Result<Vec<PathBuf>> {
-    let rollfile_interval = config()?.rollfile_interval;
+/// Find telemetry files
+///
+/// This function finds all telemetry files in the configured directory.
+///
+/// If `ignore_age` is true, return telemetry files regardless of age, otherwise
+/// only return files that are older than the configured poll interval.
+fn find_telemetry_files(ignore_age: bool) -> Result<Vec<PathBuf>> {
+    let poll_interval = config()?.poll_interval;
     let telemetry_dir = &telemetry_config()?.fuelup_tmp;
 
     // Filter out files not containing `.telemetry.` in the filename
@@ -322,7 +332,7 @@ fn find_telemetry_files() -> Result<Vec<PathBuf>> {
         .filter(|p| p.is_file())
         .filter(|p| p.to_string_lossy().contains(".telemetry."))
         .filter_map(|path| {
-            if rollfile_interval < path.metadata().ok()?.modified().ok()?.elapsed().ok()? {
+            if ignore_age || poll_interval < path.metadata().ok()?.modified().ok()?.elapsed().ok()? {
                 Some(Ok(path))
             } else {
                 None
