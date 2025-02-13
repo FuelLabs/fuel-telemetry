@@ -39,8 +39,8 @@ pub enum TelemetryError {
     //
     // FileWatcher errors
     //
-    #[error("Invalid rollfile interval: {0}")]
-    InvalidRollfileInterval(#[from] std::num::ParseIntError),
+    #[error("Invalid poll interval: {0}")]
+    InvalidPollInterval(#[from] std::num::ParseIntError),
     #[error("Tracing event is invalid: {0}")]
     InvalidTracingEvent(String),
     #[error("Tracing regex is invalid: {0}")]

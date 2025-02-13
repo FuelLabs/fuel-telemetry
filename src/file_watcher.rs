@@ -51,9 +51,10 @@ fn config() -> Result<&'static FileWatcherConfig> {
     static FILEWATCHER_CONFIG: LazyLock<Result<FileWatcherConfig>> = LazyLock::new(|| {
         let get_env = |key, default| EnvSetting::new(key, default).get();
 
-        let rollfile_interval = get_env("FILEWATCHER_ROLLFILE_INTERVAL", "3600")
+        // Since we use an hourly appender, we default to polling every hour
+        let poll_interval = get_env("FILEWATCHER_POLL_INTERVAL", "3600")
             .parse()
-            .map_err(TelemetryError::InvalidRollfileInterval)?;
+            .map_err(TelemetryError::InvalidPollInterval)?;
 
         // Format the InfluxDB URL (the org name needs to be URL-encoded)
         let influxdb_url = format!(
@@ -69,7 +70,7 @@ fn config() -> Result<&'static FileWatcherConfig> {
         Ok(FileWatcherConfig {
             lockfile: Path::new(&telemetry_config()?.fuelup_tmp).join("telemetry-file-watcher.lock"),
             logfile: Path::new(&telemetry_config()?.fuelup_log).join("telemetry-file-watcher.log"),
-            rollfile_interval: Duration::from_secs(rollfile_interval),
+            poll_interval: Duration::from_secs(poll_interval),
             influxdb_token: get_env("INFLUXDB_TOKEN", "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag=="),
             influxdb_url,
         })
@@ -175,7 +176,8 @@ impl FileWatcher {
                 exit(0)
             }
 
-            sleep(config()?.rollfile_interval);
+            // Sleep for the configured interval before polling again
+            sleep(config()?.poll_interval);
         }
     }
 
