@@ -8,7 +8,7 @@ fn main() {
     telemetry_layer.set_global_default();
 
     // Create a `FileWatcher` to submit telemetry to InfluxDB
-    let file_watcher = file_watcher::FileWatcher::new().unwrap();
+    let mut file_watcher = file_watcher::FileWatcher::new().unwrap();
 
     // Start the `FileWatcher`
     file_watcher.start().unwrap_or_else(|e| {
