@@ -25,12 +25,16 @@ pub enum TelemetryError {
     //
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
+    #[error("Invalid client")]
+    InvalidClient,
     #[error("Home directory is invalid: {0}")]
     InvalidHomeDir(String),
     #[error("Log directory is invalid: {0}")]
     InvalidLogDir(String),
     #[error("Logfile is invalid: {0}/{1}")]
     InvalidLogFile(String, PathBuf),
+    #[error("Invalid request")]
+    InvalidRequest,
     #[error("Temporary directory is invalid: {0}")]
     InvalidTmpDir(String),
     #[error("Home directory is unreachable")]
