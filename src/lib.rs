@@ -319,9 +319,14 @@ impl TelemetryLayer {
     /// tracing_subscriber::registry().with(telemetry_layer).init();
     /// ```
     pub fn new_with_filewatcher() -> Result<(Self, WorkerGuard)> {
-        let (layer, guard) = Self::new()?;
-        let file_watcher = file_watcher::FileWatcher::new()?;
+        // Warning: We need to create the `FileWatcher` before the `TelemetryLayer`
+        // as there is a race condition in the thread runtime of `tracing` and
+        // the tokio runtime of `Reqwest`. Swapping order of the two could lead to
+        // possible deadlocks.
+        let mut file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
+
+        let (layer, guard) = Self::new()?;
         Ok((layer, guard))
     }
 
@@ -358,9 +363,14 @@ impl TelemetryLayer {
     /// let _guard = TelemetryLayer::new_global_default_with_filewatcher()?;
     /// ```
     pub fn new_global_default_with_filewatcher() -> Result<WorkerGuard> {
-        let guard = Self::new_global_default()?;
-        let file_watcher = file_watcher::FileWatcher::new()?;
+        // Warning: We need to create the `FileWatcher` before the `TelemetryLayer`
+        // as there is a race condition in the thread runtime of `tracing` and
+        // the tokio runtime of `Reqwest`. Swapping order of the two could lead to
+        // possible deadlocks.
+        let mut file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
+
+        let guard = Self::new_global_default()?;
         Ok(guard)
     }
 }
