@@ -10,7 +10,7 @@ use nix::{
     unistd::{chdir, close, dup2, fork, setsid, sysconf, SysconfVar},
 };
 use regex::Regex;
-use reqwest::blocking::{Client, Request, RequestBuilder};
+use reqwest::blocking::Client;
 use std::{
     clone::Clone,
     collections::HashMap,
@@ -87,8 +87,6 @@ fn config() -> Result<&'static FileWatcherConfig> {
 
 /// A `FileWatcher` polls for aged-out telemetry files and sends them to InfluxDB
 pub struct FileWatcher {
-    // A cached request to send to InfluxDB
-    request: Request,
     // The path to its lockfile ($FUELUP_TMP/telemetry-file-watcher.lock)
     lockfile_path: PathBuf,
 }
@@ -130,19 +128,7 @@ static TELEMETRY_PAYLOAD_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
 impl FileWatcher {
     /// Create a new `FileWatcher`
     pub fn new() -> Result<Self> {
-        // Cache the InfluxDB request since it won't change between calls
-        let request = Client::new()
-            .post(&config()?.influxdb_url)
-            .header("Content-Type", "text/plain; charset=utf-8")
-            .header("Accept", "application/json")
-            .header(
-                "Authorization",
-                format!("Token {}", config()?.influxdb_token.clone()),
-            )
-            .build()?;
-
         Ok(Self {
-            request,
             lockfile_path: Path::new(&telemetry_config()?.fuelup_tmp)
                 .join(config()?.lockfile.clone()),
         })
@@ -286,12 +272,18 @@ impl FileWatcher {
                 continue;
             }
 
-            // Send LineProtocol to InfluxDB
-            let response = RequestBuilder::from_parts(
-                Client::new(),
-                self.request
-                    .try_clone()
-                    .ok_or(TelemetryError::ReqwestCloneFailed)?,
+            // Do not cache creating this request in the constructor then attempt
+            // to use build_from_parts() here, because the `Client` used to build
+            // the request is in another castle^Wprocess (we've since forked many
+            // times), and so a `Client::new()` here will deadlock as it will
+            // try to connect to a non-existant connection pool.
+            let response = Client::new()
+                .post(&config()?.influxdb_url)
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .header("Accept", "application/json")
+                .header(
+                    "Authorization",
+                    format!("Token {}", config()?.influxdb_token.clone()),
             )
             .body(body.join("\n"))
             .send()?;
