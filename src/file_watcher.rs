@@ -10,7 +10,7 @@ use nix::{
     unistd::{chdir, close, dup2, fork, setsid, sysconf, SysconfVar},
 };
 use regex::Regex;
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, Request, RequestBuilder};
 use std::{
     clone::Clone,
     collections::HashMap,
@@ -87,6 +87,10 @@ fn config() -> Result<&'static FileWatcherConfig> {
 
 /// A `FileWatcher` polls for aged-out telemetry files and sends them to InfluxDB
 pub struct FileWatcher {
+    // The client used to send requests to InfluxDB
+    client: Option<Client>,
+    // The request to send to InfluxDB
+    request: Option<Request>,
     // The path to its lockfile ($FUELUP_TMP/telemetry-file-watcher.lock)
     lockfile_path: PathBuf,
 }
@@ -129,6 +133,8 @@ impl FileWatcher {
     /// Create a new `FileWatcher`
     pub fn new() -> Result<Self> {
         Ok(Self {
+            client: None,
+            request: None,
             lockfile_path: Path::new(&telemetry_config()?.fuelup_tmp)
                 .join(config()?.lockfile.clone()),
         })
@@ -139,7 +145,7 @@ impl FileWatcher {
     /// This function forks and has the parent immediately return. The forked
     /// off child then daemonises to poll for aged-out telemetry files, sending
     /// them to InfluxDB, and exits once there are no more files to process.
-    pub fn start(&self) -> Result<()> {
+    pub fn start(&mut self) -> Result<()> {
         if var("FUELUP_NO_TELEMETRY").is_ok() {
             // If telemetry is disabled, immediately return
             return Ok(());
@@ -149,6 +155,21 @@ impl FileWatcher {
             // If we are the parent, immediately return
             return Ok(());
         }
+
+        self.client = Some(Client::new());
+        self.request = Some(
+            self.client
+                .as_ref()
+                .ok_or(TelemetryError::InvalidClient)?
+                .post(&config()?.influxdb_url)
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .header("Accept", "application/json")
+                .header(
+                    "Authorization",
+                    format!("Token {}", config()?.influxdb_token.clone()),
+                )
+                .build()?,
+        );
 
         loop {
             // Enforce a singleton to ensure we are the only process submitting
@@ -169,7 +190,7 @@ impl FileWatcher {
 
     /// Poll for aged-out telemetry files
     fn poll_directory(&self) -> Result<bool> {
-        for file in find_telemetry_files(true)? {
+        for file in find_telemetry_files(false)? {
             // Lock the telemetry file to prevent being submitted twice
             let locked_file = Flock::lock(
                 OpenOptions::new().read(true).open(&file)?,
@@ -277,18 +298,20 @@ impl FileWatcher {
             // the request is in another castle^Wprocess (we've since forked many
             // times), and so a `Client::new()` here will deadlock as it will
             // try to connect to a non-existant connection pool.
-            let response = Client::new()
-                .post(&config()?.influxdb_url)
-                .header("Content-Type", "text/plain; charset=utf-8")
-                .header("Accept", "application/json")
-                .header(
-                    "Authorization",
-                    format!("Token {}", config()?.influxdb_token.clone()),
+            let request = RequestBuilder::from_parts(
+                self.client
+                    .as_ref()
+                    .ok_or(TelemetryError::InvalidClient)?
+                    .clone(),
+                self.request
+                    .as_ref()
+                    .ok_or(TelemetryError::InvalidRequest)?
+                    .try_clone()
+                    .ok_or(TelemetryError::ReqwestCloneFailed)?,
             )
-            .body(body.join("\n"))
-            .send()?;
+            .body(body.join("\n"));
 
-            if response.status().is_success() {
+            if request.send()?.status().is_success() {
                 // Only remove the telemetry file if successful
                 remove_file(&file)?;
             }
