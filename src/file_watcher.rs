@@ -131,6 +131,14 @@ static TELEMETRY_PAYLOAD_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
 
 impl FileWatcher {
     /// Create a new `FileWatcher`
+    ///
+    /// Warning: This function should only be called in applications and not
+    /// within libraries as it will clobber any set by the application.
+    ///
+    /// Warning: If you will be creating a `FileWatcher` and a `TelemetryLayer`,
+    /// you must create the `FileWatcher` before the `TelemetryLayer` as there is
+    /// a race condition in the thread runtime of `tracing` and the tokio runtime
+    /// of `Reqwest`. Swapping order of the two could lead to possible deadlocks.
     pub fn new() -> Result<Self> {
         Ok(Self {
             client: None,
