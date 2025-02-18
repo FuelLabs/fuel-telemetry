@@ -342,6 +342,9 @@ impl TelemetryLayer {
         let mut file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
 
+        let mut systeminfo_watcher = systeminfo_watcher::SystemInfoWatcher::new()?;
+        systeminfo_watcher.start()?;
+
         let (layer, guard) = Self::new()?;
         Ok((layer, guard))
     }
@@ -385,6 +388,9 @@ impl TelemetryLayer {
         // possible deadlocks.
         let mut file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
+
+        let mut systeminfo_watcher = systeminfo_watcher::SystemInfoWatcher::new()?;
+        systeminfo_watcher.start()?;
 
         let guard = Self::new_global_default()?;
         Ok(guard)
