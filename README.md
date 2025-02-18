@@ -155,7 +155,7 @@ cost.
 
 Telemetry files on disk are stored Base64 encoded. To peek into them:
 
-    cat ~/.fuelup/tmp/example.telemetry.2025-02-13-00 | while read line; do echo "$line" | base64 -d; echo; done
+    cat ~/.fuelup/tmp/*.telemetry.* | while read line; do echo "$line" | base64 -d; echo; done
 
 ### Manually Aging Out Telemetry Files
 
@@ -164,7 +164,7 @@ default, we can force files to age out early so they are instantly submitted
 on next run:
 
     for f in ~/.fuelup/tmp/*.telemetry.*; do mv "$f" "$f.old"; done
-    touch -t 20250101 ~/.fuelup/tmp/*
+    touch -t 202501010101 ~/.fuelup/tmp/*
 
 ### Architectural Design
 
