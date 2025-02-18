@@ -283,10 +283,16 @@ impl TelemetryLayer {
             } else {
                 // If telemetry is enabled, telemetry will be written to a file
                 // that is rotated hourly with the filename format:
-                // "$FUELUP_TMP/<crate>.telemetry.YYYY-MM-DD-HH"
+                // "$FUELUP_TMP/<crate|bucket>.telemetry.YYYY-MM-DD-HH"
+                //
+                // Also, the bucket name can't be set within `telemetry_config()` as
+                // we need to be able to set it dynamically by Watchers
                 tracing_appender::non_blocking(tracing_appender::rolling::hourly(
                     PathBuf::from(telemetry_config()?.fuelup_tmp.clone()),
-                    format!("{}.telemetry", env!("CARGO_CRATE_NAME")),
+                    format!(
+                        "{}.telemetry",
+                        var("INFLUXDB_BUCKET").unwrap_or(env!("CARGO_CRATE_NAME").to_string())
+                    ),
                 ))
             }
         };
@@ -558,7 +564,7 @@ where
             self.triple,
             self.os,
             self.os_version,
-            env!("CARGO_PKG_NAME"),
+            var("INFLUXDB_BUCKET").unwrap_or(env!("CARGO_CRATE_NAME").to_string()),
             env!("CARGO_PKG_VERSION"),
             event.metadata().file().unwrap_or("unknown"),
         )?;

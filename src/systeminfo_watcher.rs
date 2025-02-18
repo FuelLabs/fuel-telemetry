@@ -8,7 +8,7 @@ use nix::{
     time::ClockId,
 };
 use std::{
-    env::var,
+    env::{set_var, var},
     fs::OpenOptions,
     os::fd::AsRawFd,
     path::{Path, PathBuf},
@@ -82,6 +82,17 @@ impl SystemInfoWatcher {
             // If we are the parent, immediately return
             return Ok(());
         }
+
+        // Warning: We need to create the `TelemetryLayer` after daemonising
+        // as there is a race condition in the thread runtime of `tracing` and
+        // the tokio runtime of `Reqwest`. Swapping order of the two could lead to
+        // possible deadlocks.
+        //
+        // Also, we need to set the bucket name as the SystemInfoWatcher is
+        // global rather than being crate/process specific
+        set_var("INFLUXDB_BUCKET", "systeminfo_watcher");
+        let (telemetry_layer, _guard) = TelemetryLayer::new()?;
+        telemetry_layer.set_global_default();
 
         // Enforce a singleton to ensure we are the only process submitting
         // telemetry to InfluxDB
