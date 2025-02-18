@@ -362,5 +362,3 @@ fn find_telemetry_files(ignore_age: bool) -> Result<Vec<PathBuf>> {
         })
         .collect::<Result<Vec<_>>>()
 }
-
-

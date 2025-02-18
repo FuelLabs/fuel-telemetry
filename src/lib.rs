@@ -569,7 +569,7 @@ where
             event.metadata().file().unwrap_or("unknown"),
         )?;
 
-        // For each span in the event, write out the span its fields to the temporary writer
+        // For each span in the event, write out the span and its fields to the temporary writer
         if let Some(scope) = ctx.event_scope() {
             for span in scope.from_root() {
                 write!(tmp_writer, "{}", span.name())?;
