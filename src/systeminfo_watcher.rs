@@ -197,6 +197,10 @@ impl SystemInfoWatcher {
             load_average_15m = load_average.fifteen,
         );
 
+        // Update the touchfile's modification time by truncating it
+        touchfile_lock.set_len(0)?;
+        touchfile_lock.sync_all()?;
+
         Ok(())
     }
 }
