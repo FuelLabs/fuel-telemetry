@@ -316,7 +316,7 @@ impl FileWatcher {
             )
             .body(body.join("\n"));
 
-            if request.send()?.status().is_success() {
+            if request.send().map_or(false, |r| r.status().is_success()) {
                 // Only remove the telemetry file if successful
                 remove_file(&file)?;
             }

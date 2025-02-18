@@ -261,7 +261,7 @@ fn detect_vm() -> Result<&'static str> {
             request = request.header(key, value);
         }
 
-        if request.send()?.status() == reqwest::StatusCode::OK {
+        if request.send().map_or(false, |r| r.status().is_success()) {
             return Ok(provider);
         }
     }
