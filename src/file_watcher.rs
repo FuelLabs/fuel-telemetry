@@ -54,7 +54,10 @@ fn config() -> Result<&'static FileWatcherConfig> {
         // Since we use an hourly appender, we default to polling every hour
         let poll_interval = get_env("FILEWATCHER_POLL_INTERVAL", "3600")
             .parse()
-            .map_err(TelemetryError::InvalidPollInterval)?;
+            .map_err(|e| TelemetryError::InvalidConfig(format!(
+                "Poll interval is invalid: {}",
+                e
+            )))?;
 
         // Format the InfluxDB URL (the org name needs to be URL-encoded)
         let influxdb_url = format!(
