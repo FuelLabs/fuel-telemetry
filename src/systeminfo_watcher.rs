@@ -98,7 +98,6 @@ impl SystemInfoWatcher {
         // Enforce a singleton to ensure we are the only process submitting
         // telemetry to InfluxDB
         let _lock = enforce_singleton(&config()?.lockfile)?;
-        eprintln!("Lock enforced");
 
         // Check if it's time to collect metrics
         self.poll_systeminfo()?;
