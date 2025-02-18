@@ -73,6 +73,7 @@ pub mod prelude {
 /// - Creates the root `span` called "main"
 /// - Enters the "main" `span`
 /// - Create a `FileWatcher` and starts it
+/// - Create a `SystemInfoWatcher` and starts it
 ///
 /// Warning: this function should only be called in applications and not within
 /// libraries as it sets the global default subscriber, clobbering any set by
@@ -85,7 +86,7 @@ pub mod prelude {
 /// ```
 pub fn telemetry_init() -> Result<()> {
     static TELEMETRY_INIT: LazyLock<Result<(WorkerGuard, Span)>> = LazyLock::new(|| {
-        let guard = TelemetryLayer::new_global_default_with_filewatcher()?;
+        let guard = TelemetryLayer::new_global_default_with_watchers()?;
         let main_span = span!(Level::ERROR, "main", telemetry = true);
         Ok((guard, main_span))
     });
@@ -262,9 +263,10 @@ impl TelemetryLayer {
     /// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will
     /// flush any remaining telemetry to the file.
     ///
-    /// Warning: this function does not create a `FileWatcher` and so although
-    /// telemetry files will be written to disk when `telemetry=true` for a
-    /// span, they will not be sent to InfluxDB
+    /// Warning: this function does not create a `FileWatcher` and
+    /// `SystemInfoWatcher`, and so although telemetry files will be written to
+    /// disk when `telemetry=true` for a span, they will not be sent to
+    /// InfluxDB
     ///
     /// ```rust
     /// use fuel_telemetry::TelemetryLayer;
@@ -325,20 +327,20 @@ impl TelemetryLayer {
     }
 
     /// A convenience function to do `new()` followed by creating and starting a
-    /// `FileWatcher` within a single step.
+    /// `FileWatcher` and `SystemInfoWatcher` within a single step.
     ///
     /// ```rust
     /// use fuel_telemetry::TelemetryLayer;
     /// use tracing_subscriber::prelude::*;
     ///
-    /// let (telemetry_layer, _guard) = TelemetryLayer::new_with_filewatcher()?;
+    /// let (telemetry_layer, _guard) = TelemetryLayer::new_with_watchers()?;
     /// tracing_subscriber::registry().with(telemetry_layer).init();
     /// ```
-    pub fn new_with_filewatcher() -> Result<(Self, WorkerGuard)> {
-        // Warning: We need to create the `FileWatcher` before the `TelemetryLayer`
-        // as there is a race condition in the thread runtime of `tracing` and
-        // the tokio runtime of `Reqwest`. Swapping order of the two could lead to
-        // possible deadlocks.
+    pub fn new_with_watchers() -> Result<(Self, WorkerGuard)> {
+        // Warning: We need to create the `FileWatcher` and `SystemInfoWatcher`
+        // before the `TelemetryLayer` as there is a race condition in the
+        // thread runtime of `tracing` and the tokio runtime of `Reqwest`.
+        // Swapping order of the two could lead to possible deadlocks.
         let mut file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
 
@@ -355,8 +357,9 @@ impl TelemetryLayer {
     /// Warning: this function should only be called in applications and not
     /// within libraries as it will clobber any set by the application.
     ///
-    /// Warning: this function does not create a `FileWatcher` and so although
-    /// telemetry files will be written to disk, they will not be sent to
+    /// Warning: this function does not create a `FileWatcher` and
+    /// `SystemInfoWatcher`, and so although telemetry files will be written to
+    /// disk when `telemetry=true` for a span, they will not be sent to
     /// InfluxDB
     ///
     /// ```rust
@@ -371,7 +374,7 @@ impl TelemetryLayer {
     }
 
     /// A convenience function to do `new_global_default()` followed by creating
-    /// and starting a `FileWatcher` within a single step.
+    /// and starting a `FileWatcher` and `SystemInfoWatcher` within a single step.
     ///
     /// Warning: this function should only be called in applications and not
     /// within libraries as it will clobber any set by the application.
@@ -379,13 +382,13 @@ impl TelemetryLayer {
     /// ```rust
     /// use fuel_telemetry::TelemetryLayer;
     ///
-    /// let _guard = TelemetryLayer::new_global_default_with_filewatcher()?;
+    /// let _guard = TelemetryLayer::new_global_default_with_watchers()?;
     /// ```
-    pub fn new_global_default_with_filewatcher() -> Result<WorkerGuard> {
-        // Warning: We need to create the `FileWatcher` before the `TelemetryLayer`
-        // as there is a race condition in the thread runtime of `tracing` and
-        // the tokio runtime of `Reqwest`. Swapping order of the two could lead to
-        // possible deadlocks.
+    pub fn new_global_default_with_watchers() -> Result<WorkerGuard> {
+        // Warning: We need to create the `FileWatcher` and `SystemInfoWatcher`
+        // before the `TelemetryLayer` as there is a race condition in the
+        // thread runtime of `tracing` and the tokio runtime of `Reqwest`.
+        // Swapping order of the two could lead to possible deadlocks.
         let mut file_watcher = file_watcher::FileWatcher::new()?;
         file_watcher.start()?;
 
@@ -617,8 +620,10 @@ where
     }
 }
 
-/// Enforce a singleton to ensure we are the only `FileWatcher` running and
-/// submitting telemetry to InfluxDB
+/// Enforce a singleton by taking an advisory lock on a file
+///
+/// This function takes an advisory lock on a file, and if another process has
+/// already locked the file, it will exit the current process.
 fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
     let lockfile = OpenOptions::new()
         .create(true)
@@ -628,7 +633,7 @@ fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
     let lock = match Flock::lock(lockfile.try_clone()?, FlockArg::LockExclusiveNonblock) {
         Ok(lock) => lock,
         Err((_, Errno::EWOULDBLOCK)) => {
-            // Silently exit as another running `FileWatcher` was found
+            // Silently exit as another process has already locked the file
             exit(0);
         }
         Err((_, e)) => return Err(TelemetryError::from(e)),
@@ -708,7 +713,7 @@ fn daemonise(log_filename: &PathBuf) -> Result<bool> {
     Ok(false)
 }
 
-/// Setup stdio for the `FileWatcher`
+/// Setup stdio for the process
 ///
 /// This function redirects stderr to its logfile while discarding any IO to the
 /// controlling terminal.

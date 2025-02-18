@@ -9,6 +9,7 @@ fn main() {
     // - Creates the root `span` called "main"
     // - Enters the "main" `span`
     // - Create a `FileWatcher` and starts it
+    // - Create a `SystemInfoWatcher` and starts it
     telemetry_init().unwrap();
 
     info!("An event with span 'main' is recorded since telemetry_init() sets telemetry=true");

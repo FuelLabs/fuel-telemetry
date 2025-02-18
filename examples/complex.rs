@@ -1,4 +1,4 @@
-use fuel_telemetry::{prelude::*, file_watcher};
+use fuel_telemetry::{file_watcher, prelude::*, systeminfo_watcher};
 
 fn main() {
     // Create a `TelemetryLayer` which is a `tracing` `Layerd` that records telemetry
@@ -13,6 +13,14 @@ fn main() {
     // Start the `FileWatcher`
     file_watcher.start().unwrap_or_else(|e| {
         panic!("FileWatcher start failed: {e:?}");
+    });
+
+    // Create a `SystemInfoWatcher` to submit system info to InfluxDB
+    let mut systeminfo_watcher = systeminfo_watcher::SystemInfoWatcher::new().unwrap();
+
+    // Start the `SystemInfoWatcher`
+    systeminfo_watcher.start().unwrap_or_else(|e| {
+        panic!("SystemInfoWatcher start failed: {e:?}");
     });
 
     event!(

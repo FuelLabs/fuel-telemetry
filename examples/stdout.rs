@@ -3,7 +3,7 @@ use tracing_subscriber::prelude::*;
 
 fn main() {
     // Create a `Telemetry` `Layer` and its drop guard
-    let (telemetry_layer, _guard) = TelemetryLayer::new_with_filewatcher().unwrap();
+    let (telemetry_layer, _guard) = TelemetryLayer::new_with_watchers().unwrap();
 
     // Create a stdout `Layer`
     let stdout_layer = tracing_subscriber::fmt::layer().with_writer(std::io::stdout);
