@@ -395,7 +395,9 @@ impl TelemetryLayer {
         let _ = file_watcher::FileWatcher::new().map(|mut f| f.start());
         let _ = systeminfo_watcher::SystemInfoWatcher::new().map(|mut s| s.start());
 
-        let guard = Self::new_global_default()?;
+        let (layer, guard) = Self::new()?;
+        layer.set_global_default();
+
         Ok(guard)
     }
 }
