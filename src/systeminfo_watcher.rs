@@ -1,5 +1,6 @@
 use crate::{
-    daemonise, enforce_singleton, info, telemetry_config, EnvSetting, Result, TelemetryError,
+    daemonise, enforce_singleton, info, span, telemetry_config, EnvSetting, Level, Result,
+    TelemetryError, TelemetryLayer,
 };
 
 use nix::{

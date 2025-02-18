@@ -1,4 +1,4 @@
-use crate::{telemetry_config, EnvSetting, Result, TelemetryError, enforce_singleton, daemonise};
+use crate::{daemonise, enforce_singleton, telemetry_config, EnvSetting, Result, TelemetryError};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::NaiveDateTime;
