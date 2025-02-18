@@ -25,13 +25,15 @@ If you're writing an app where:
 
 then the quickest way to get going is:
 
-    use fuel_telemetry::prelude::*;
+```rust
+use fuel_telemetry::prelude::*;
 
-    fn main() {
-        telemetry_init().unwrap();
+fn main() {
+    telemetry_init().unwrap();
 
-        info!("This event will be sent to InfluxDB");
-    }
+    info!("This event will be sent to InfluxDB");
+}
+```
 
 ### Within Applications with No Existing Tracing (Disabled by Default)
 
@@ -41,17 +43,19 @@ If you're writing an app where:
 
 then the quickest way to get going is:
 
-    use fuel_telemetry::prelude::*;
+```rust
+use fuel_telemetry::prelude::*;
 
-    fn main() {
-        let _guard = TelemetryLayer::new_global_default_with_filewatcher()?;
-        info!("This event will not be sent in InfluxDB as telemetry=false by default");
+fn main() {
+    let _guard = TelemetryLayer::new_global_default_with_filewatcher()?;
+    info!("This event will not be sent in InfluxDB as telemetry=false by default");
 
-        let enabled_span = span!(Level::INFO, "root", telemetry=true);
-        let _span_guard = enabled_span.enter();
+    let enabled_span = span!(Level::INFO, "root", telemetry=true);
+    let _span_guard = enabled_span.enter();
 
-        info!("This event will be sent to InfluxDB as telemetry=true for the current span");
-    }
+    info!("This event will be sent to InfluxDB as telemetry=true for the current span");
+}
+```
 
 ### Within Applications with Existing Tracing
 
@@ -59,26 +63,28 @@ If you're writing an app where `fuel-telemetry` will need to work along side
 other `tracing` `Layer`s or `Subscriber`s, you will need to create a
 `TelemetryLayer` by hand and then add it to your existing `Subscriber` e.g:
 
-    use fuel_telemetry::prelude::*;
-    use tracing_subscriber::prelude::*;
+```rust
+use fuel_telemetry::prelude::*;
+use tracing_subscriber::prelude::*;
 
-    fn main() {
-        // Create a `Telemetry` `Layer` where events will appear in InfluxDB
-        let (telemetry_layer, _guard) = TelemetryLayer::new_with_filewatcher().unwrap();
+fn main() {
+    // Create a `Telemetry` `Layer` where events will appear in InfluxDB
+    let (telemetry_layer, _guard) = TelemetryLayer::new_with_filewatcher().unwrap();
 
-        // Create a stdout `Layer` where events will appear on `stdout`
-        let stdout_layer = tracing_subscriber::fmt::layer().with_writer(std::io::stdout);
+    // Create a stdout `Layer` where events will appear on `stdout`
+    let stdout_layer = tracing_subscriber::fmt::layer().with_writer(std::io::stdout);
 
-        // Create a `Subscriber` and combine these two `Layers`
-        let subscriber = tracing_subscriber::registry()
-            .with(telemetry_layer)
-            .with(stdout_layer);
+    // Create a `Subscriber` and combine these two `Layers`
+    let subscriber = tracing_subscriber::registry()
+        .with(telemetry_layer)
+        .with(stdout_layer);
 
-        // Set our subscriber as the default global subscriber
-        tracing::subscriber::set_global_default(subscriber).unwrap();
+    // Set our subscriber as the default global subscriber
+    tracing::subscriber::set_global_default(subscriber).unwrap();
 
-        info!("This event will only be sent to stdout as telemetry=false by default");
-    }
+    info!("This event will only be sent to stdout as telemetry=false by default");
+}
+```
 
 ### Within Libraries
 
