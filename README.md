@@ -118,7 +118,7 @@ There are 2 ways to set the `telemetry` field:
 
 Given that `tracing` `Span`s are hierarchical, if a function does not have a
 `tracing` attribute or does have one but the `telemetry` field is not set, we
-fall back by climing the heirarchy until we explicitly find one set. In the end
+fall back by climbing the hierarchy until we explicitly find one set. In the end
 if no `Span` is found, we default to `telemetry=false`.
 
 ## Warning!
@@ -143,7 +143,7 @@ cost.
 
 ### Inspecting Telemetry Files
 
-Telemetry files on disk are stored Base64 encoded. To peak into them:
+Telemetry files on disk are stored Base64 encoded. To peek into them:
 
     cat ~/.fuelup/tmp/example.telemetry.2025-02-13-00 | while read line; do echo "$line" | base64 -d; echo; done
 
