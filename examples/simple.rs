@@ -1,66 +1,37 @@
 use fuel_telemetry::prelude::*;
 
 fn main() {
-    // This convenience function hides most of the tracing and telemetry
-    // boilerplate code:
-    //
-    // - Creates a new `TelemetryLayer` `tracing` `Layer`
-    // - Sets it as the global default `tracing` `Subscriber`
-    // - Creates the root `span` called "main"
-    // - Enters the "main" `span`
-    // - Create a `FileWatcher` and starts it
-    // - Create a `SystemInfoWatcher` and starts it
+    // Initialise telemetry (this enables telemetry by default and sets the
+    // root `Span` to `main`)
     telemetry_init().unwrap();
 
-    info!("An event with span 'main' is recorded since telemetry_init() sets telemetry=true");
-
-    test_a();
+    get_public_data(42);
+    get_private_data(99);
 }
 
-// When a function has an attribute in the form
-// `#[tracing::instrument(fields(telemetry = true))]`, function calls create a
-// an `Event` on entry along with the following settings:
-// - span name: `<function_name>`
-// - telemetry: true
-// - fields: function argument name and values used during the call
-//
-// To hide sensitive function parameters from being recorded, the skip attribute parameter can be used:
-// `#[tracing::instrument(fields(telemetry = true), skip(<sensitive_parameter_name>))]`
-//
-// Here however, we are setting `telemetry=false` so `Event`s will be ignored.
-#[tracing::instrument(fields(telemetry = false))]
-fn test_a() {
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
+fn get_public_data(seed: u64) {
+    let start = std::time::Instant::now();
+    // <process that takes a while>
+    let duration = start.elapsed().as_secs_f64();
 
-    test_b();
-    test_c();
-    test_d();
-    test_e();
-}
+    let span = span!(Level::INFO, "get_public_data");
+    let _guard = span.enter();
 
-pub fn test_b() {
-    // As there was no function argument for `test_b()`, we fall back to the
-    // current span (which would be `main:test_a`), however as the `test_a()`
-    // function attribute sets telemetry=false, this event will be ignored`
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
-}
-
-#[tracing::instrument(fields(telemetry = true))]
-pub fn test_c() {
-    info!("An event with span 'main:test_a:test_c' is recorded since test_c()'s attribute sets telemetry=true");
-}
-
-pub fn test_d() {
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
+    // The following event will have a `Span` of `main:get_public_data`
+    // and will be sent to InfluxDB as telemetry is enabled
+    info!(seed, duration);
 }
 
 #[tracing::instrument(fields(telemetry = false))]
-pub fn test_e() {
-    info!("An event with span 'main:test_a:test_e' is ignored since test_e()'s attribute sets telemetry=false");
+fn get_private_data(seed: u64) {
+    let start = std::time::Instant::now();
+    // <process that takes a while>
+    let duration = start.elapsed().as_secs_f64();
 
-    // We can also create `Span`s manually rather than from a function attribute:
-    let level_e_span = span!(Level::ERROR, "level_e", telemetry = true);
-    let _level_e_guard = level_e_span.enter();
+    let span = span!(Level::INFO, "get_private_data");
+    let _guard = span.enter();
 
-    info!("An event with span 'main:test_a:test_e:level_e' is recorded since level_e's fields sets telemetry=true");
+    // The following event will NOT be sent to InfluxDB as
+    // telemetry=false for the current `Span`
+    info!(seed, duration);
 }

@@ -19,40 +19,32 @@ fn main() {
     // - `stdout_layer` will print events to stdout
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
-    info!("An event with span 'main' is ignored since telemetry=false by default");
+    get_public_data(42);
+    get_private_data(99);
+}
 
-    test_a();
+fn get_public_data(seed: u64) {
+    let start = std::time::Instant::now();
+    // <process that takes a while>
+    let duration = start.elapsed().as_secs_f64();
+
+    let span = span!(Level::INFO, "get_public_data", telemetry = true);
+    let _guard = span.enter();
+
+    // The following event will have a `Span` of `get_public_data`,
+    // will be printed to stdout, and will be sent to InfluxDB as
+    // telemetry=true for the current `Span`
+    info!(seed, duration);
 }
 
 #[tracing::instrument(fields(telemetry = false))]
-fn test_a() {
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
+fn get_private_data(seed: u64) {
+    let start = std::time::Instant::now();
+    // <process that takes a while>
+    let duration = start.elapsed().as_secs_f64();
 
-    test_b();
-    test_c();
-    test_d();
-    test_e();
-}
-
-pub fn test_b() {
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
-}
-
-#[tracing::instrument(fields(telemetry = true))]
-pub fn test_c() {
-    info!("An event with span 'main:test_a:test_c' is recorded since test_c()'s attribute sets telemetry=true");
-}
-
-pub fn test_d() {
-    info!("An event with span 'main:test_a' is ignored since test_a()'s attribute sets telemetry=false");
-}
-
-#[tracing::instrument(fields(telemetry = false))]
-pub fn test_e() {
-    info!("An event with span 'main:test_a:test_e' is ignored since test_e()'s attribute sets telemetry=false");
-
-    let level_e_span = span!(Level::ERROR, "level_e", telemetry = true);
-    let _level_e_guard = level_e_span.enter();
-
-    info!("An event with span 'main:test_a:test_e:level_e' is recorded since level_e's fields sets telemetry=true");
+    // The following event will have a `Span` of `get_private_data`,
+    // will be printed to stdout, but will NOT be sent to InfluxDB as
+    // telemetry=false for the current function's attribute
+    info!(seed, duration);
 }
