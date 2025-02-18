@@ -1,5 +1,6 @@
 pub mod errors;
 pub mod file_watcher;
+pub mod systeminfo_watcher;
 
 use crate::errors::TelemetryError;
 
