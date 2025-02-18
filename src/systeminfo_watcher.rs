@@ -179,6 +179,9 @@ impl SystemInfoWatcher {
         let ci = detect_ci();
         let vm = detect_vm()?;
 
+        let span = span!(Level::INFO, "poll_systeminfo", telemetry = true);
+        let _guard = span.enter();
+
         info!(
             cpu_arch = System::cpu_arch(),
             cpu_brand = cpu_brand,
