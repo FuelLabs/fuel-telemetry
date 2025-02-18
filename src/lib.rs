@@ -258,7 +258,7 @@ impl TelemetryLayer {
     /// Create a new `TelemetryLayer`.
     ///
     /// This `tracing` `Layer` is to be used along with the `tracing` crate, and
-    /// composess with other `Layer`s to create a subscriber.
+    /// composes with other `Layer`s to create a `Subscriber`.
     ///
     /// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will
     /// flush any remaining telemetry to the file.
@@ -266,7 +266,8 @@ impl TelemetryLayer {
     /// Warning: this function does not create a `FileWatcher` and
     /// `SystemInfoWatcher`, and so although telemetry files will be written to
     /// disk when `telemetry=true` for a span, they will not be sent to
-    /// InfluxDB
+    /// InfluxDB. If in doubt, stick to using either `new_with_watchers()` or
+    /// `new_global_default_with_watchers()` instead.
     ///
     /// ```rust
     /// use fuel_telemetry::TelemetryLayer;
@@ -329,6 +330,18 @@ impl TelemetryLayer {
     /// A convenience function to do `new()` followed by creating and starting a
     /// `FileWatcher` and `SystemInfoWatcher` within a single step.
     ///
+    /// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will
+    /// flush any remaining telemetry to the file.
+    ///
+    /// Use this function if you are using `fuel-telemetry` along with other
+    /// `tracing` `Layers`s within your application.
+    ///
+    /// If however you are using `fuel-telemetry` as your only `tracing`
+    /// `Subscriber`, you should instead use `new_global_default_with_watchers()`.
+    ///
+    /// Warning: this function should only be called in applications and not
+    /// within libraries as it will clobber any set by the application.
+    ///
     /// ```rust
     /// use fuel_telemetry::TelemetryLayer;
     /// use tracing_subscriber::prelude::*;
@@ -351,30 +364,17 @@ impl TelemetryLayer {
         Ok((layer, guard))
     }
 
-    /// A convenience function to do `new()` and `set_global_default()` within a
-    /// single step.
+    /// A convenience function to do `new()` followed by creating and starting
+    /// a `FileWatcher` and `SystemInfoWatcher` within a single step.
     ///
-    /// Warning: this function should only be called in applications and not
-    /// within libraries as it will clobber any set by the application.
+    /// Returns a drop guard. Here, the drop guard will flush any remaining
+    /// telemetry to the file.
     ///
-    /// Warning: this function does not create a `FileWatcher` and
-    /// `SystemInfoWatcher`, and so although telemetry files will be written to
-    /// disk when `telemetry=true` for a span, they will not be sent to
-    /// InfluxDB
+    /// Use this function if you are using `fuel-telemetry` as your only
+    /// `tracing` `Subscriber` within your application.
     ///
-    /// ```rust
-    /// use fuel_telemetry::TelemetryLayer;
-    ///
-    /// let _guard = TelemetryLayer::new_global_default().unwrap();
-    /// ```
-    pub fn new_global_default() -> Result<WorkerGuard> {
-        let (layer, guard) = Self::new()?;
-        layer.set_global_default();
-        Ok(guard)
-    }
-
-    /// A convenience function to do `new_global_default()` followed by creating
-    /// and starting a `FileWatcher` and `SystemInfoWatcher` within a single step.
+    /// If however you are using `fuel-telemetry` along with other `tracing`
+    /// `Layers`s, you should instead use `new_with_watchers()`.
     ///
     /// Warning: this function should only be called in applications and not
     /// within libraries as it will clobber any set by the application.
