@@ -107,24 +107,38 @@ impl SystemInfoWatcher {
     }
 
     fn poll_systeminfo(&self) -> Result<()> {
-        //  Lock the touchfile, creating it if necessary
-        let locked_file = Flock::lock(
-            OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&config()?.touchfile)?,
-            FlockArg::LockExclusiveNonblock,
-        )
-        .map_err(|(_, e)| e)?;
+        // If the lockfile is not found, create it and continue. Otherwise,
+        // check its modification time and return if it's too recent
+        let touchfile_lock = if !config()?.touchfile.exists() {
+            Flock::lock(
+                OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&config()?.touchfile)?,
+                FlockArg::LockExclusiveNonblock,
+            )
+            .map_err(|(_, e)| e)?
+        } else {
+            let locked_file = Flock::lock(
+                OpenOptions::new()
+                    .create(false)
+                    .append(true)
+                    .open(&config()?.touchfile)?,
+                FlockArg::LockExclusiveNonblock,
+            )
+            .map_err(|(_, e)| e)?;
 
-        let now = ClockId::CLOCK_REALTIME
-            .now()
-            .map_err(|e| TelemetryError::Nix(e.to_string()))?;
+            let now = ClockId::CLOCK_REALTIME
+                .now()
+                .map_err(|e| TelemetryError::Nix(e.to_string()))?;
 
-        // Return if it's too early to collect metrics
-        if now.tv_sec() < fstat(locked_file.as_raw_fd())?.st_mtime + config()?.interval as i64 {
-            return Ok(());
-        }
+            if now.tv_sec() < fstat(locked_file.as_raw_fd())?.st_mtime + config()?.interval as i64 {
+                // We must have collected metrics recently, so return
+                return Ok(());
+            }
+
+            locked_file
+        };
 
         let mut sysinfo = System::new();
         //
