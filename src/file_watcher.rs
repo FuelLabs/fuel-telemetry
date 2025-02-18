@@ -1,23 +1,17 @@
-use crate::{telemetry_config, EnvSetting, Result, TelemetryError};
+use crate::{telemetry_config, EnvSetting, Result, TelemetryError, enforce_singleton, daemonise};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::NaiveDateTime;
 use influxdb_line_protocol::LineProtocolBuilder;
-use nix::{
-    errno::Errno,
-    fcntl::{Flock, FlockArg},
-    sys::stat,
-    unistd::{chdir, close, dup2, fork, setsid, sysconf, SysconfVar},
-};
+use nix::fcntl::{Flock, FlockArg};
 use regex::Regex;
 use reqwest::blocking::{Client, Request, RequestBuilder};
 use std::{
     clone::Clone,
     collections::HashMap,
     env::var,
-    fs::{read_dir, remove_file, File, OpenOptions},
-    io::{stderr, stdout, BufRead, BufReader, Write},
-    os::fd::AsRawFd,
+    fs::{read_dir, remove_file, OpenOptions},
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::exit,
     sync::LazyLock,
@@ -162,7 +156,7 @@ impl FileWatcher {
             return Ok(());
         }
 
-        if daemonise()? {
+        if daemonise(&config()?.logfile)? {
             // If we are the parent, immediately return
             return Ok(());
         }
@@ -369,119 +363,4 @@ fn find_telemetry_files(ignore_age: bool) -> Result<Vec<PathBuf>> {
         .collect::<Result<Vec<_>>>()
 }
 
-/// Enforce a singleton to ensure we are the only `FileWatcher` running and
-/// submitting telemetry to InfluxDB
-fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
-    let lockfile = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(filename)?;
 
-    let lock = match Flock::lock(lockfile.try_clone()?, FlockArg::LockExclusiveNonblock) {
-        Ok(lock) => lock,
-        Err((_, Errno::EWOULDBLOCK)) => {
-            // Silently exit as another running `FileWatcher` was found
-            exit(0);
-        }
-        Err((_, e)) => return Err(TelemetryError::from(e)),
-    };
-
-    Ok(lock)
-}
-
-/// Daemonise the current process
-///
-/// This function forks and has the parent immediately return. The forked off
-/// child then follows the common "double-fork" method of daemonising.
-fn daemonise() -> Result<bool> {
-    stdout().flush()?;
-    stderr().flush()?;
-
-    // Return if we are the parent
-    if unsafe { fork()? }.is_parent() {
-        return Ok(true);
-    };
-
-    // To prevent us from becoming a zombie when we die, we fork then kill the
-    // parent so that we are immediately inherited by init/systemd. Doing so, we
-    // are guaranteed to be reaped on exit.
-    //
-    // Also, doing this guarantees that we are not the group leader, which is
-    // required to create a new session (i.e setsid() will fail otherwise)
-    if unsafe { fork()? }.is_parent() {
-        exit(0);
-    }
-
-    // Creating a new session means we won't receive signals to the original
-    // group or session (e.g. hitting CTRL-C to break a command pipeline)
-    setsid()?;
-
-    // As session leader, we now fork then follow the child again to guarantee
-    // we cannot re-acquire a terminal
-    if unsafe { fork()? }.is_parent() {
-        exit(0);
-    }
-
-    // Setup stdio to write errors to the logfile while discarding any IO to
-    // the controlling terminal
-    setup_stdio(
-        Path::new(&telemetry_config()?.fuelup_tmp)
-            .join(config()?.logfile.clone())
-            .to_str()
-            .ok_or(TelemetryError::InvalidLogFile(
-                telemetry_config()?.fuelup_tmp.clone(),
-                config()?.logfile.clone(),
-            ))?,
-    )?;
-
-    // The current working directory needs to be set to root so that we don't
-    // prevent any unmounting of the filesystem leading up to the directory we
-    // started in
-    chdir("/")?;
-
-    // We close all file descriptors since any currently opened were inherited
-    // from the parent process which we don't care about. Not doing so leaks
-    // open file descriptors which could lead to exhaustion.
-
-    // Skip the first three because we deal with stdio later. Here, 1024 is a
-    // safe value i.e MIN(Legacy Linux, MacOS)
-    let max_fd = sysconf(SysconfVar::OPEN_MAX)?.unwrap_or(1024) as i32;
-
-    for fd in 3..=max_fd {
-        match close(fd) {
-            Ok(()) | Err(Errno::EBADF) => {}
-            Err(e) => return Err(TelemetryError::from(e)),
-        }
-    }
-
-    // Clear the umask so that files we create aren't too permission-restricive
-    stat::umask(stat::Mode::empty());
-
-    Ok(false)
-}
-
-/// Setup stdio for the `FileWatcher`
-///
-/// This function redirects stderr to its logfile while discarding any IO to the
-/// controlling terminal.
-pub(crate) fn setup_stdio(log_filename: &str) -> Result<()> {
-    let log_file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_filename)?;
-
-    // Redirect stderr to the logfile
-    dup2(log_file.as_raw_fd(), 2)?;
-
-    // Get a filehandle to /dev/null
-    let dev_null = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open("/dev/null")?;
-
-    // Redirect stdin, stdout to /dev/null
-    dup2(dev_null.as_raw_fd(), 0)?;
-    dup2(dev_null.as_raw_fd(), 1)?;
-
-    Ok(())
-}
