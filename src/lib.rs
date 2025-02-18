@@ -354,11 +354,11 @@ impl TelemetryLayer {
         // before the `TelemetryLayer` as there is a race condition in the
         // thread runtime of `tracing` and the tokio runtime of `Reqwest`.
         // Swapping order of the two could lead to possible deadlocks.
-        let mut file_watcher = file_watcher::FileWatcher::new()?;
-        file_watcher.start()?;
-
-        let mut systeminfo_watcher = systeminfo_watcher::SystemInfoWatcher::new()?;
-        systeminfo_watcher.start()?;
+        //
+        // If the watchers fail to start, we silently ignore the errors as
+        // telemetry should not impede the program from running.
+        let _ = file_watcher::FileWatcher::new().map(|mut f| f.start());
+        let _ = systeminfo_watcher::SystemInfoWatcher::new().map(|mut s| s.start());
 
         let (layer, guard) = Self::new()?;
         Ok((layer, guard))
@@ -389,11 +389,11 @@ impl TelemetryLayer {
         // before the `TelemetryLayer` as there is a race condition in the
         // thread runtime of `tracing` and the tokio runtime of `Reqwest`.
         // Swapping order of the two could lead to possible deadlocks.
-        let mut file_watcher = file_watcher::FileWatcher::new()?;
-        file_watcher.start()?;
-
-        let mut systeminfo_watcher = systeminfo_watcher::SystemInfoWatcher::new()?;
-        systeminfo_watcher.start()?;
+        //
+        // If the watchers fail to start, we silently ignore the errors as
+        // telemetry should not impede the program from running.
+        let _ = file_watcher::FileWatcher::new().map(|mut f| f.start());
+        let _ = systeminfo_watcher::SystemInfoWatcher::new().map(|mut s| s.start());
 
         let guard = Self::new_global_default()?;
         Ok(guard)
