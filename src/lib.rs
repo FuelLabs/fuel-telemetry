@@ -40,6 +40,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     Layer as LayerTrait, Registry,
 };
+use uuid::Uuid;
 
 pub type Result<T> = std::result::Result<T, TelemetryError>;
 
@@ -461,6 +462,8 @@ struct TelemetryFormatter {
     os: String,
     // Caches the operating system version used for every event
     os_version: String,
+    // Trace-ID for the telemetry session
+    trace_id: String,
 }
 
 impl TelemetryFormatter {
@@ -482,6 +485,7 @@ impl TelemetryFormatter {
         Self {
             os: System::name().unwrap_or_default(),
             os_version: System::kernel_version().unwrap_or_default(),
+            trace_id: Uuid::new_v4().to_string(),
             triple: format!(
                 "{}-{}-{}",
                 match std::env::consts::ARCH {
@@ -511,12 +515,12 @@ where
     ///
     /// This function formats an `Event` into a `tracing` `Writer` with the following format:
     ///
-    /// <timestamp> <level> <triple>:<os>:<os-version> <crate>:<version>:<file> <spans> <fields>
+    /// <timestamp> <level> <triple>:<os>:<os-version> <crate>:<version>:<file> <trace-id> <spans> <fields>
     ///
     /// e.g:
     ///
     /// ```text
-    /// 2021-08-31T14:00:00.000000Z ERROR x86_64-apple-darwin:Arch Linux:6.12.3-arch1-1 fuel-telemetry:0.1.0:fuelup/src/main.rs root:span1:span2: field1="val1" "A test message"
+    /// 2021-08-31T14:00:00.000000Z ERROR x86_64-apple-darwin:Arch Linux:6.12.3-arch1-1 fuel-telemetry:0.1.0:fuelup/src/main.rs ddfc7485-c40f-4e3f-8203-704cccbd7475 root:span1:span2: field1="val1" "A test message"
     /// ```
     fn format_event(
         &self,
@@ -569,7 +573,7 @@ where
         // and nanoseconds.
         write!(
             &mut tmp_writer,
-            "{} {:>5} {}:{}:{} {}:{}:{} ",
+            "{} {:>5} {}:{}:{} {}:{}:{} {} ",
             Utc::now().format("%Y-%m-%dT%H:%M:%S%.9fZ"),
             event.metadata().level(),
             self.triple,
@@ -578,6 +582,7 @@ where
             var("INFLUXDB_BUCKET").unwrap_or(env!("CARGO_CRATE_NAME").to_string()),
             env!("CARGO_PKG_VERSION"),
             event.metadata().file().unwrap_or("unknown"),
+            self.trace_id,
         )?;
 
         // For each span in the event, write out the span and its fields to the temporary writer

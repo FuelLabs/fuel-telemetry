@@ -100,6 +100,7 @@ static TELEMETRY_EVENT_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
         (?P<level>(TRACE|DEBUG|INFO|WARN|ERROR))                                  \s+
         (?P<triple>.*?):(?P<os>.*?):(?P<os_version>.*?)                           \s+
         (?P<crate_pkg_name>[^\s]+):(?P<crate_pkg_version>[^\s]+):(?P<file>[^\s]+) \s+
+        (?P<trace_id>[^\s]+)                                                      \s+
         (?P<payload>.*)                                                           \s*
         $
         ",
@@ -262,6 +263,10 @@ impl FileWatcher {
                     )
                     .tag("file", event.name("file").map_or("", |m| m.as_str()))
                     .tag("spans", &spans_short.join(":"))
+                    .tag(
+                        "trace_id",
+                        event.name("trace_id").map_or("", |m| m.as_str()),
+                    )
                     .field("spans_long", spans_long.join(":").as_str())
                     .field("triple", event.name("triple").map_or("", |m| m.as_str()));
 
