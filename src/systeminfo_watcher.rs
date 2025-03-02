@@ -151,7 +151,7 @@ impl SystemInfoWatcher {
         sysinfo.refresh_cpu_usage();
 
         let cpus = sysinfo.cpus();
-        let cpu_count = cpus.len().to_string();
+        let cpu_count = cpus.len();
         let cpu_brand = cpus
             .first()
             .map_or_else(String::default, |cpu| cpu.brand().into());
@@ -185,18 +185,18 @@ impl SystemInfoWatcher {
             cpu_arch = System::cpu_arch(),
             cpu_brand = cpu_brand,
             cpu_count = cpu_count,
-            global_cpu_usage = sysinfo.global_cpu_usage(),
+            global_cpu_usage = (sysinfo.global_cpu_usage() as f64 * 100.0).trunc() / 100.0,
             total_memory = total_memory,
             free_memory = free_memory,
-            free_memory_percentage = free_memory_percentage,
+            free_memory_percentage = (free_memory_percentage * 100.0).trunc() / 100.0,
             os_long_name = System::long_os_version().unwrap_or_default(),
             kernel_version = System::kernel_version().unwrap_or_default(),
             uptime = System::uptime(),
             vm = vm,
             ci = ci,
-            load_average_1m = load_average.one,
-            load_average_5m = load_average.five,
-            load_average_15m = load_average.fifteen,
+            load_average_1m = (load_average.one * 100.0).trunc() / 100.0,
+            load_average_5m = (load_average.five * 100.0).trunc() / 100.0,
+            load_average_15m = (load_average.fifteen * 100.0).trunc() / 100.0,
         );
 
         // Update the touchfile's modification time by truncating it
