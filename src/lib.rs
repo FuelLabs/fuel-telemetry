@@ -631,7 +631,7 @@ where
 ///
 /// This function takes an advisory lock on a file, and if another process has
 /// already locked the file, it will exit the current process.
-fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
+pub(crate) fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
     let lockfile = OpenOptions::new()
         .create(true)
         .append(true)
@@ -653,7 +653,7 @@ fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
 ///
 /// This function forks and has the parent immediately return. The forked off
 /// child then follows the common "double-fork" method of daemonising.
-fn daemonise(log_filename: &PathBuf) -> Result<bool> {
+pub(crate) fn daemonise(log_filename: &PathBuf) -> Result<bool> {
     stdout().flush()?;
     stderr().flush()?;
 
