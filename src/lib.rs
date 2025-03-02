@@ -483,8 +483,8 @@ impl TelemetryFormatter {
     pub fn new() -> Self {
         // Cache the values we'll use for every event
         Self {
-            os: System::name().unwrap_or_default(),
-            os_version: System::kernel_version().unwrap_or_default(),
+            os: System::name().unwrap_or("unknown".to_string()),
+            os_version: System::kernel_version().unwrap_or("unknown".to_string()),
             trace_id: Uuid::new_v4().to_string(),
             triple: format!(
                 "{}-{}-{}",
