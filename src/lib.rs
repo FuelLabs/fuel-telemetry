@@ -25,8 +25,8 @@ use std::{
 };
 use sysinfo::System;
 use tracing::{
-    span::{Entered, Id, Record},
-    Event, Span, Subscriber,
+    span::{Id, Record},
+    Event, Subscriber,
 };
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::layer::Context;
@@ -35,9 +35,7 @@ use tracing_subscriber::{
         format::{DefaultFields, FormatEvent, FormatFields, Writer},
         FmtContext, FormattedFields, Layer,
     },
-    layer::SubscriberExt,
     registry::LookupSpan,
-    util::SubscriberInitExt,
     Layer as LayerTrait, Registry,
 };
 use uuid::Uuid;
