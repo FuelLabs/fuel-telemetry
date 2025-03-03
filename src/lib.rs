@@ -249,21 +249,22 @@ impl TelemetryLayer {
                 // If telemetry is disabled, discards all output
                 tracing_appender::non_blocking(std::io::sink())
             } else {
+                // This value needs to come from the cargo target which must be
+                // set from a macro constructor. Calling `env!('CARGO_PKG_NAME')`
+                // here will be incorrect as the macro will have already expaneded
+                // leading to the constant value "fuel-telemetry" for all targets
                 if var("TELEMETRY_PKG_NAME").is_err() || var("TELEMETRY_PKG_VERSION").is_err() {
                     return Err(TelemetryError::InvalidUsage);
                 }
 
                 // If telemetry is enabled, telemetry will be written to a file
                 // that is rotated hourly with the filename format:
-                // "$FUELUP_TMP/<crate|bucket>.telemetry.YYYY-MM-DD-HH"
-                //
-                // Also, the bucket name can't be set within `telemetry_config()` as
-                // we need to be able to set it dynamically by Watchers
+                // "$FUELUP_TMP/<crate>.telemetry.YYYY-MM-DD-HH"
                 tracing_appender::non_blocking(tracing_appender::rolling::hourly(
                     PathBuf::from(telemetry_config()?.fuelup_tmp.clone()),
                     format!(
                         "{}.telemetry",
-                        var("INFLUXDB_BUCKET").unwrap_or(env!("CARGO_CRATE_NAME").to_string())
+                        var("TELEMETRY_PKG_NAME").map_err(|_| TelemetryError::UnreadableCrateName)?
                     ),
                 ))
             }
@@ -456,8 +457,8 @@ where
             self.triple,
             self.os,
             self.os_version,
-            var("INFLUXDB_BUCKET").unwrap_or(env!("CARGO_CRATE_NAME").to_string()),
-            env!("CARGO_PKG_VERSION"),
+            var("TELEMETRY_PKG_NAME").unwrap_or("unknown".to_string()),
+            var("TELEMETRY_PKG_VERSION").unwrap_or("unknown".to_string()),
             event.metadata().file().unwrap_or("unknown"),
             self.trace_id,
         )?;
