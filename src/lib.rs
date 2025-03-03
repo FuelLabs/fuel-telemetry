@@ -249,6 +249,10 @@ impl TelemetryLayer {
                 // If telemetry is disabled, discards all output
                 tracing_appender::non_blocking(std::io::sink())
             } else {
+                if var("TELEMETRY_PKG_NAME").is_err() || var("TELEMETRY_PKG_VERSION").is_err() {
+                    return Err(TelemetryError::InvalidUsage);
+                }
+
                 // If telemetry is enabled, telemetry will be written to a file
                 // that is rotated hourly with the filename format:
                 // "$FUELUP_TMP/<crate|bucket>.telemetry.YYYY-MM-DD-HH"
