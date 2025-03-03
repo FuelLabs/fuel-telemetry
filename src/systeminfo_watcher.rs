@@ -1,6 +1,6 @@
 use crate::{
-    daemonise, enforce_singleton, info, span, telemetry_config, EnvSetting, Level, Result,
-    TelemetryError, TelemetryLayer,
+    self as fuel_telemetry, daemonise, enforce_singleton, info, new_with_watchers_and_init, span,
+    telemetry_config, EnvSetting, Level, Result, TelemetryError,
 };
 
 use nix::{
@@ -91,9 +91,8 @@ impl SystemInfoWatcher {
         //
         // Also, we need to set the bucket name as the SystemInfoWatcher is
         // global rather than being crate/process specific
-        set_var("INFLUXDB_BUCKET", "systeminfo_watcher");
-        let (telemetry_layer, _guard) = TelemetryLayer::new()?;
-        telemetry_layer.set_global_default();
+        set_var("TELEMETRY_PKG_NAME", "systeminfo_watcher");
+        let _guard = new_with_watchers_and_init!()?;
 
         // Enforce a singleton to ensure we are the only process submitting
         // telemetry to InfluxDB
