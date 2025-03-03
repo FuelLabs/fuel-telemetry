@@ -12,6 +12,8 @@ name = "fuel_telemetry"
 path = "src/lib.rs"
 
 [dependencies]
+macros = { path = "./macros" }
+
 base64 = "0.22"
 chrono = "0.4"
 dirs = "6.0"

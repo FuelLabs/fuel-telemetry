@@ -2,8 +2,15 @@ pub mod errors;
 pub mod file_watcher;
 pub mod systeminfo_watcher;
 
-// Re-export tracing so proc-macros can use
+// Re-export proc_macros so they can be used
+pub use macros::{new, new_with_watchers, new_with_watchers_and_init};
+
+// Re-export tracing so proc_macros can use them
 pub use tracing as __reexport_tracing;
+pub use tracing_appender::non_blocking::WorkerGuard as __reexport_WorkerGuard;
+pub use tracing_subscriber as __reexport_tracing_subscriber;
+pub use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt as __reexport_tracing_subscriber_SubscriberExt;
+pub use tracing_subscriber::util::SubscriberInitExt as __reexport_tracing_subscriber_SubscriberInitExt;
 
 use crate::errors::TelemetryError;
 
