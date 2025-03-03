@@ -217,7 +217,7 @@ impl EnvSetting {
 /// location ($FUEL_HOME/tmp/<crate>.telemetry), ready for ingestion by an
 /// InfluxDB collector.
 pub struct TelemetryLayer {
-    inner: Layer<Registry, DefaultFields, TelemetryFormatter, NonBlocking>,
+    pub __inner: Layer<Registry, DefaultFields, TelemetryFormatter, NonBlocking>,
 }
 
 /// Enters a temporary `Span` with telemetry enabled, then generates an `Event`
@@ -326,9 +326,8 @@ impl TelemetryLayer {
             .with_ansi(false)
             .event_format(TelemetryFormatter::new());
 
-        Ok((Self { inner }, guard))
+        Ok((Self { __inner: inner }, guard))
     }
-
 }
 
 // Implement the `Layer` trait for `TelemetryLayer`
@@ -336,35 +335,35 @@ impl TelemetryLayer {
 // Here we simply proxy calls to the inner layer.
 impl LayerTrait<Registry> for TelemetryLayer {
     fn on_close(&self, id: Id, ctx: Context<'_, Registry>) {
-        self.inner.on_close(id, ctx);
+        self.__inner.on_close(id, ctx);
     }
 
     fn on_enter(&self, id: &span::Id, ctx: Context<'_, Registry>) {
-        self.inner.on_enter(id, ctx);
+        self.__inner.on_enter(id, ctx);
     }
 
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, Registry>) {
-        self.inner.on_event(event, ctx);
+        self.__inner.on_event(event, ctx);
     }
 
     fn on_exit(&self, id: &span::Id, ctx: Context<'_, Registry>) {
-        self.inner.on_exit(id, ctx);
+        self.__inner.on_exit(id, ctx);
     }
 
     fn on_id_change(&self, old: &span::Id, new: &span::Id, ctx: Context<'_, Registry>) {
-        self.inner.on_id_change(old, new, ctx);
+        self.__inner.on_id_change(old, new, ctx);
     }
 
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, Registry>) {
-        self.inner.on_new_span(attrs, id, ctx);
+        self.__inner.on_new_span(attrs, id, ctx);
     }
 
     fn on_follows_from(&self, span: &span::Id, follows: &span::Id, ctx: Context<'_, Registry>) {
-        self.inner.on_follows_from(span, follows, ctx);
+        self.__inner.on_follows_from(span, follows, ctx);
     }
 
     fn on_record(&self, span: &Id, values: &Record<'_>, ctx: Context<'_, Registry>) {
-        self.inner.on_record(span, values, ctx);
+        self.__inner.on_record(span, values, ctx);
     }
 }
 
@@ -383,7 +382,8 @@ impl LayerTrait<Registry> for TelemetryLayer {
 /// - `version`: the version of the crate
 /// - `file`: the file where the event was generated
 ///
-struct TelemetryFormatter {
+#[derive(Default)]
+pub struct TelemetryFormatter {
     // Caches the system triple used for every event
     triple: String,
     // Caches the operating system name used for every event
