@@ -102,12 +102,26 @@ fn main() {
 
 ### Within Libraries
 
-**Warning: libraries should not set the global default subscriber as it will
-clobber any set by the application.**
+**Warning: libraries should not be setting the global default subscriber as it
+will clobber any set by the application. In fact, `fuel-telemetry`'s own
+`set_global_default()` function will return an error if you accidently call it
+from within a library.**
 
-Libraries should not need to interact with `TelemetryLayer` directly. Instead,
-use the regular `tracing` crate macros (e.g `info!()`, `warn!()` etc) to record
-`Event`s.
+Libraries should not need to interact with a `TelemetryLayer` directly. Instead,
+just use the convenience macros provided when you need to record telemetry
+events i.e:
+
+- `info_telemetry!()`
+- `warn_telemetry!()`
+- `error_telemetry!()`
+- `debug_telemetry!()`
+- `trace_telemetry!()`
+
+```rust
+use fuel_telemetry::prelude::*;
+
+info_telemetry!(guess = 42);
+```
 
 **Note:** `telemetry` is `disabled` by default. See below on how to enable telemetry
 on `Event`s within your library.
@@ -155,7 +169,9 @@ cost.
 
 Telemetry files on disk are stored Base64 encoded. To peek into them:
 
-    cat ~/.fuelup/tmp/*.telemetry.* | while read line; do echo "$line" | base64 -d; echo; done
+```sh
+cat ~/.fuelup/tmp/*.telemetry.* | while read line; do echo "$line" | base64 -d; echo; done
+```
 
 ### Manually Aging Out Telemetry Files
 
@@ -163,8 +179,31 @@ As `FileWatcher` only submits files to InfluxDB that are over an hour old by
 default, we can force files to age out early so they are instantly submitted
 on next run:
 
-    for f in ~/.fuelup/tmp/*.telemetry.*; do mv "$f" "$f.old"; done
-    touch -t 202501010101 ~/.fuelup/tmp/*
+```sh
+for f in ~/.fuelup/tmp/*.telemetry.*; do mv "$f" "$f.old"; done
+touch -t 202501010101 ~/.fuelup/tmp/*
+```
+
+### Overriding InfluxDB's Endpoint
+
+Use the `INFLUXDB_URL` environment variable to point to a different InfluxDB
+endpoint. This can be combined with running a local InfluxDB container:
+
+```sh
+docker compose up influxdb2
+export INFLUXDB_URL=http://localhost:8086
+```
+
+The InfluxDB connection settings can be further configured using the following
+environment variables:
+
+- `INFLUXDB_TOKEN`
+- `INFLUXDB_ORG`
+- `INFLUXDB_BUCKET`
+
+See InfluxDB's documentation for [Using Docker
+Compose](https://docs.influxdata.com/influxdb/v2/install/use-docker-compose/)
+for more info on getting InfluxDB running locally.
 
 ### Architectural Design
 
