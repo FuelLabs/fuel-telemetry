@@ -201,7 +201,7 @@ environment variables:
 - `INFLUXDB_ORG`
 - `INFLUXDB_BUCKET`
 
-See InfluxDB's documentation for [Using Docker
+See InfluxDB's documentation [Using Docker
 Compose](https://docs.influxdata.com/influxdb/v2/install/use-docker-compose/)
 for more info on getting InfluxDB running locally.
 
