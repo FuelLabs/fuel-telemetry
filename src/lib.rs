@@ -2,6 +2,9 @@ pub mod errors;
 pub mod file_watcher;
 pub mod systeminfo_watcher;
 
+// Re-export tracing so proc-macros can use
+pub use tracing as __reexport_tracing;
+
 use crate::errors::TelemetryError;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -59,10 +62,10 @@ pub type Result<T> = std::result::Result<T, TelemetryError>;
 /// - `Level`
 pub mod prelude {
     pub use crate::{
-        debug, error, event, info, span, trace, warn, Level, TelemetryLayer,
+        debug, debug_telemetry, error, error_telemetry, event, info, info_telemetry, span,
+        span_telemetry, trace, trace_telemetry, warn, warn_telemetry, Level, TelemetryLayer,
     };
 }
-
 
 /// Re-export tracing macros for convenience
 ///
@@ -215,6 +218,55 @@ impl EnvSetting {
 /// InfluxDB collector.
 pub struct TelemetryLayer {
     inner: Layer<Registry, DefaultFields, TelemetryFormatter, NonBlocking>,
+}
+
+/// Enters a temporary `Span` with telemetry enabled, then generates an `Event`
+///
+/// Note: The `Span` name is currently hardcoded to "auto" as `tracing::span!`
+/// requires the name to be `const` as internally it is evaluated as a static,
+/// however getting the caller's function name in statics is experimental.
+#[macro_export]
+macro_rules! span_telemetry {
+    ($level:expr, $($arg:tt)*) => {
+        fuel_telemetry::__reexport_tracing::span!($level, "auto", telemetry = true).in_scope(|| {
+            fuel_telemetry::__reexport_tracing::event!($level, $($arg)*)
+        })
+    }
+}
+
+#[macro_export]
+macro_rules! error_telemetry {
+    ($($arg:tt)*) => {{
+        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::ERROR, $($arg)*);
+    }}
+}
+
+#[macro_export]
+macro_rules! warn_telemetry {
+    ($($arg:tt)*) => {{
+        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::WARN, $($arg)*);
+    }}
+}
+
+#[macro_export]
+macro_rules! info_telemetry {
+    ($($arg:tt)*) => {{
+        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::INFO, $($arg)*);
+    }}
+}
+
+#[macro_export]
+macro_rules! debug_telemetry {
+    ($($arg:tt)*) => {{
+        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::DEBUG, $($arg)*);
+    }}
+}
+
+#[macro_export]
+macro_rules! trace_telemetry {
+    ($($arg:tt)*) => {{
+        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::TRACE, $($arg)*);
+    }}
 }
 
 impl TelemetryLayer {
