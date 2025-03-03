@@ -48,7 +48,6 @@ pub type Result<T> = std::result::Result<T, TelemetryError>;
 ///
 /// Exports the following names:
 ///
-/// - `telemetry_init`
 /// - `TelemetryLayer`
 ///
 /// - `trace!`
@@ -62,45 +61,10 @@ pub type Result<T> = std::result::Result<T, TelemetryError>;
 /// - `Level`
 pub mod prelude {
     pub use crate::{
-        debug, error, event, info, span, telemetry_init, trace, warn, Level, TelemetryLayer,
+        debug, error, event, info, span, trace, warn, Level, TelemetryLayer,
     };
 }
 
-/// Convenience function to do everything needed for telemetry in one step
-///
-/// This function does the following:
-/// - Creates a new `TelemetryLayer` `tracing` `Layer`
-/// - Sets it as the global default `tracing` `Subscriber`
-/// - Creates the root `span` called "main"
-/// - Enters the "main" `span`
-/// - Create a `FileWatcher` and starts it
-/// - Create a `SystemInfoWatcher` and starts it
-///
-/// Warning: this function should only be called in applications and not within
-/// libraries as it sets the global default subscriber, clobbering any set by
-/// the application.
-///
-/// ```rust
-/// use fuel_telemetry::prelude::*;
-///
-/// telemetry_init()?;
-/// ```
-pub fn telemetry_init() -> Result<()> {
-    static TELEMETRY_INIT: LazyLock<Result<(WorkerGuard, Span)>> = LazyLock::new(|| {
-        let guard = TelemetryLayer::new_global_default_with_watchers()?;
-        let main_span = span!(Level::ERROR, "main", telemetry = true);
-        Ok((guard, main_span))
-    });
-
-    static TELEMETRY_MAIN_GUARD: LazyLock<Result<Entered>> = LazyLock::new(|| {
-        let (_, main_span) = TELEMETRY_INIT.as_ref()?;
-        Ok(main_span.enter())
-    });
-
-    TELEMETRY_MAIN_GUARD.as_ref()?;
-
-    Ok(())
-}
 
 /// Re-export tracing macros for convenience
 ///
