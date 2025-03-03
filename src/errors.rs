@@ -2,7 +2,7 @@ use base64::DecodeError;
 use std::{io, path::PathBuf, string::FromUtf8Error};
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone)]
 pub enum TelemetryError {
     //
     // External errors
@@ -37,8 +37,12 @@ pub enum TelemetryError {
     InvalidRequest,
     #[error("Temporary directory is invalid: {0}")]
     InvalidTmpDir(String),
+    #[error("Do not use 'TelemetryLayer::new()' directly, instead use the constructor macros")]
+    InvalidUsage,
     #[error("Home directory is unreachable")]
     UnreachableHomeDir,
+    #[error("Crate name is unreadable")]
+    UnreadableCrateName,
 
     //
     // FileWatcher errors
@@ -56,6 +60,12 @@ pub enum TelemetryError {
 impl From<&TelemetryError> for TelemetryError {
     fn from(err: &TelemetryError) -> Self {
         err.clone()
+    }
+}
+
+impl std::fmt::Debug for TelemetryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
