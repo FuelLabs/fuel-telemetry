@@ -14,7 +14,7 @@ use std::{
     os::fd::AsRawFd,
     path::{Path, PathBuf},
     process::exit,
-    sync::LazyLock,
+    sync::{atomic::{AtomicBool, Ordering}, LazyLock},
     time::Duration,
 };
 use sysinfo::{MemoryRefreshKind, System};
@@ -75,6 +75,15 @@ impl SystemInfoWatcher {
         if var("FUELUP_NO_TELEMETRY").is_ok() {
             // If telemetry is disabled, immediately return
             return Ok(());
+        }
+
+        // Prevent recursive calls to start()
+        static STARTED: AtomicBool = AtomicBool::new(false);
+
+        if STARTED.load(Ordering::Relaxed) {
+            return Ok(());
+        } else {
+            STARTED.store(true, Ordering::Relaxed);
         }
 
         // Even though we won't be hanging around long, we still daemonise
