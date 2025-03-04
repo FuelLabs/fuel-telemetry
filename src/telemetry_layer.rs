@@ -24,30 +24,13 @@ pub struct TelemetryLayer {
 }
 
 impl TelemetryLayer {
-    /// Create a new `TelemetryLayer`.
+    /// Although public, `__new()` is only intended to be called via the
+    /// following constructor macros:
     ///
-    /// This `tracing` `Layer` is to be used along with the `tracing` crate, and
-    /// composes with other `Layer`s to create a `Subscriber`.
-    ///
-    /// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will
-    /// flush any remaining telemetry to the file.
-    ///
-    /// Warning: this function does not create a `FileWatcher` and
-    /// `SystemInfoWatcher`, and so although telemetry files will be written to
-    /// disk when `telemetry=true` for a span, they will not be sent to
-    /// InfluxDB. If in doubt, stick to using either `new_with_watchers()` or
-    /// `new_global_default_with_watchers()` instead.
-    ///
-    /// ```rust
-    /// use fuel_telemetry::TelemetryLayer;
-    /// use tracing_subscriber::prelude::*;
-    ///
-    /// let (telemetry_layer, _guard) = TelemetryLayer::new().unwrap();
-    /// tracing_subscriber::registry().with(telemetry_layer).init();
-    ///
-    /// info!("Hello from telemetry");
-    /// ```
-    pub fn new() -> Result<(Self, WorkerGuard)> {
+    /// - `fuel_telemetry::new!()`
+    /// - `fuel_telemetry::new_with_watchers!()`
+    /// - `fuel_telemetry::new_with_watchers_and_init!()`
+    pub fn __new() -> Result<(Self, WorkerGuard)> {
         let (writer, guard) = {
             if var("FUELUP_NO_TELEMETRY").is_ok() {
                 // If telemetry is disabled, discards all output

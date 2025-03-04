@@ -21,6 +21,14 @@ fn set_env_vars() -> proc_macro2::TokenStream {
 }
 
 // Starts the `FileWatcher` and `SystemInfoWatcher` daemon
+//
+// Warning: We need to create the `FileWatcher` and `SystemInfoWatcher`
+// before the `TelemetryLayer` as there is a race condition in the
+// thread runtime of `tracing` and the tokio runtime of `Reqwest`.
+// Swapping order of the two could lead to possible deadlocks.
+//
+// If the watchers fail to start, we silently ignore the errors as
+// telemetry should not impede the program from running.
 fn start_watchers() -> proc_macro2::TokenStream {
     quote! {
         let _ = fuel_telemetry::file_watcher::FileWatcher::new()
@@ -33,6 +41,27 @@ fn start_watchers() -> proc_macro2::TokenStream {
     }
 }
 
+/// Create a new `TelemetryLayer`.
+///
+/// This `tracing` `Layer` is to be used along with the `tracing` crate, and
+/// composes with other `Layer`s to create a `Subscriber`.
+///
+/// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will flush
+/// any remaining telemetry to the disk.
+///
+/// Warning: this function does not create a `FileWatcher` and
+/// `SystemInfoWatcher`, and so although telemetry files will be written to
+/// disk, they will not be sent to InfluxDB. If in doubt, prefer using
+/// `new_with_watchers!()` or `new_with_watchers_and_init!()` over `new!()`.
+///
+/// ```rust
+/// use fuel_telemetry::TelemetryLayer;
+///
+/// let (telemetry_layer, _guard) = fuel_telemetry::new!()?;
+/// tracing_subscriber::registry().with(telemetry_layer).init();
+///
+/// info_telemetry!("This event will be sent to InfluxBD");
+/// ```
 #[proc_macro]
 pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let env_vars = set_env_vars();
@@ -41,12 +70,33 @@ pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         {
             #env_vars
 
-            fuel_telemetry::TelemetryLayer::new()
+            fuel_telemetry::TelemetryLayer::__new()
         }
     }
     .into()
 }
 
+/// A convenience macro to do `new!()` followed by creating and starting a
+/// `FileWatcher` and `SystemInfoWatcher` within a single step.
+///
+/// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will flush
+/// any remaining telemetry to the disk.
+///
+/// Use this macro if you are using `fuel-telemetry` along with other `tracing`
+/// `Layer`s within your application, or you have your own `tracing`
+/// `Subscriber`.
+///
+/// Otherwise, if you are using `fuel-telemetry` as your only `tracing`
+/// `Subscriber`, you should instead use `new_with_watchers_and_init!()`.
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// let (telemetry_layer, _guard) = fuel_telemetry::new_with_watchers!()?;
+/// tracing_subscriber::registry().with(telemetry_layer).init();
+///
+/// info_telemetry!("This event will be sent to InfluxBD");
+/// ```
 #[proc_macro]
 pub fn new_with_watchers(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let env_vars = set_env_vars();
@@ -57,12 +107,31 @@ pub fn new_with_watchers(_input: proc_macro::TokenStream) -> proc_macro::TokenSt
             #env_vars
             #start_watchers
 
-            fuel_telemetry::TelemetryLayer::new()
+            fuel_telemetry::TelemetryLayer::__new()
         }
     }
     .into()
 }
 
+/// A convenience macro to do `new_with_watchers!()` followed by setting the
+/// `TracingLayer` as the global default `Subscriber`.
+///
+/// Returns a `TelemetryLayer` and a drop guard. Here, the drop guard will flush
+/// any remaining telemetry to the disk.
+///
+/// Use this macro if you are using `fuel-telemetry` as your only `tracing`
+/// `Subscriber`.
+///
+/// Otherwise, if you are using `fuel-telemetry` along with other `tracing`
+/// `Layer`s within your application, you should instead use `new_with_watchers!()`.
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// let (telemetry_layer, _guard) = fuel_telemetry::new_with_watchers_and_init!()?;
+/// 
+/// info_telemetry!("This event will be sent to InfluxBD");
+/// ```
 #[proc_macro]
 pub fn new_with_watchers_and_init(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let args: Vec<String> = std::env::args().collect();
@@ -99,7 +168,7 @@ pub fn new_with_watchers_and_init(_input: proc_macro::TokenStream) -> proc_macro
             #env_vars
             #start_watchers
 
-            fuel_telemetry::TelemetryLayer::new().map(|(layer, guard)| {
+            fuel_telemetry::TelemetryLayer::__new().map(|(layer, guard)| {
                 use fuel_telemetry::__reexport_tracing_subscriber;
                 use fuel_telemetry::__reexport_tracing_subscriber_SubscriberExt;
                 use fuel_telemetry::__reexport_tracing_subscriber_SubscriberInitExt;
