@@ -169,14 +169,20 @@ pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
 }
 
 //
-// Macros
+// Convenience Macros
 //
 
-/// Enters a temporary `Span` with telemetry enabled, then generates an `Event`
+/// Enter a temporary `Span`, then generates an `Event` with telemetry enabled
 ///
 /// Note: The `Span` name is currently hardcoded to "auto" as `tracing::span!`
 /// requires the name to be `const` as internally it is evaluated as a static,
 /// however getting the caller's function name in statics is experimental.
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// span_telemetry!(Level::INFO, "This event will be sent to InfluxDB");
+/// ```
 #[macro_export]
 macro_rules! span_telemetry {
     ($level:expr, $($arg:tt)*) => {
@@ -186,6 +192,13 @@ macro_rules! span_telemetry {
     }
 }
 
+/// Generate an `ERROR` telemetry `Event`
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// error_telemetry!("This error event will be sent to InfluxDB");
+/// ```
 #[macro_export]
 macro_rules! error_telemetry {
     ($($arg:tt)*) => {{
@@ -193,6 +206,13 @@ macro_rules! error_telemetry {
     }}
 }
 
+/// Generate a `WARN` telemetry `Event`
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// warn_telemetry!("This warn event will be sent to InfluxDB");
+/// ```
 #[macro_export]
 macro_rules! warn_telemetry {
     ($($arg:tt)*) => {{
@@ -200,6 +220,13 @@ macro_rules! warn_telemetry {
     }}
 }
 
+/// Generate an `INFO` telemetry `Event`
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// info_telemetry!("This info event will be sent to InfluxDB");
+/// ```
 #[macro_export]
 macro_rules! info_telemetry {
     ($($arg:tt)*) => {{
@@ -207,6 +234,13 @@ macro_rules! info_telemetry {
     }}
 }
 
+/// Generate a `DEBUG` telemetry `Event`
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// debug_telemetry!("This debug event will be sent to InfluxDB");
+/// ```
 #[macro_export]
 macro_rules! debug_telemetry {
     ($($arg:tt)*) => {{
@@ -214,6 +248,13 @@ macro_rules! debug_telemetry {
     }}
 }
 
+/// Generate a `TRACE` telemetry `Event`
+///
+/// ```rust
+/// use fuel_telemetry::prelude::*;
+///
+/// trace_telemetry!("This trace event will be sent to InfluxDB");
+/// ```
 #[macro_export]
 macro_rules! trace_telemetry {
     ($($arg:tt)*) => {{
