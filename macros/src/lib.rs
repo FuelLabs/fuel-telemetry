@@ -2,17 +2,37 @@ use quote::quote;
 
 extern crate proc_macro;
 
+fn set_env_vars() -> proc_macro2::TokenStream {
+    quote! {
+        if std::env::var("TELEMETRY_PKG_NAME").is_err() {
+            std::env::set_var("TELEMETRY_PKG_NAME", env!("CARGO_PKG_NAME"));
+        }
+
+        if std::env::var("TELEMETRY_PKG_VERSION").is_err() {
+            std::env::set_var("TELEMETRY_PKG_VERSION", env!("CARGO_PKG_VERSION"));
+        }
+    }
+}
+
+fn start_watchers() -> proc_macro2::TokenStream {
+    quote! {
+        let _ = fuel_telemetry::file_watcher::FileWatcher::new()
+            .and_then(|mut f| f.start())
+            .map_err(|_| std::process::exit(0));
+
+        let _ = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new()
+            .and_then(|mut s| s.start())
+            .map_err(|_| std::process::exit(0));
+    }
+}
+
 #[proc_macro]
 pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let env_vars = set_env_vars();
+
     quote! {
         {
-            if std::env::var("TELEMETRY_PKG_NAME").is_err() {
-                std::env::set_var("TELEMETRY_PKG_NAME", env!("CARGO_PKG_NAME"));
-            }
-
-            if std::env::var("TELEMETRY_PKG_VERSION").is_err() {
-                std::env::set_var("TELEMETRY_PKG_VERSION", env!("CARGO_PKG_VERSION"));
-            }
+            #env_vars
 
             fuel_telemetry::TelemetryLayer::new()
         }
@@ -22,23 +42,13 @@ pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn new_with_watchers(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let env_vars = set_env_vars();
+    let start_watchers = start_watchers();
+
     quote! {
         {
-            if std::env::var("TELEMETRY_PKG_NAME").is_err() {
-                std::env::set_var("TELEMETRY_PKG_NAME", env!("CARGO_PKG_NAME"));
-            }
-
-            if std::env::var("TELEMETRY_PKG_VERSION").is_err() {
-                std::env::set_var("TELEMETRY_PKG_VERSION", env!("CARGO_PKG_VERSION"));
-            }
-
-            let _ = fuel_telemetry::file_watcher::FileWatcher::new()
-                .and_then(|mut f| f.start())
-                .map_err(|_| std::process::exit(0));
-
-            let _ = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new()
-                .and_then(|mut s| s.start())
-                .map_err(|_| std::process::exit(0));
+            #env_vars
+            #start_watchers
 
             fuel_telemetry::TelemetryLayer::new()
         }
@@ -63,29 +73,19 @@ pub fn new_with_watchers_and_init(_input: proc_macro::TokenStream) -> proc_macro
     if crate_type == "lib" && crate_name != "fuel_telemetry" {
         return quote! {
             {
-                compile_error!("new_with_watchers_and_init!() cannot be called within a library");
+                compile_error!("new_with_watchers_and_init!() cannot be called within a library")
             }
         }
         .into();
     }
 
+    let env_vars = set_env_vars();
+    let start_watchers = start_watchers();
+
     quote! {
         {
-            if std::env::var("TELEMETRY_PKG_NAME").is_err() {
-                std::env::set_var("TELEMETRY_PKG_NAME", env!("CARGO_PKG_NAME"));
-            }
-
-            if std::env::var("TELEMETRY_PKG_VERSION").is_err() {
-                std::env::set_var("TELEMETRY_PKG_VERSION", env!("CARGO_PKG_VERSION"));
-            }
-
-            let _ = fuel_telemetry::file_watcher::FileWatcher::new()
-                .and_then(|mut f| f.start())
-                .map_err(|_| std::process::exit(0));
-
-            let _ = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new()
-                .and_then(|mut s| s.start())
-                .map_err(|_| std::process::exit(0));
+            #env_vars
+            #start_watchers
 
             fuel_telemetry::TelemetryLayer::new().map(|(layer, guard)| {
                 use fuel_telemetry::__reexport_tracing_subscriber;
