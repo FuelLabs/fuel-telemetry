@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::Utc;
 use regex::Regex;
-use std::{env::var, sync::LazyLock};
+use std::{env::var, path::PathBuf, sync::LazyLock};
 use sysinfo::System;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
@@ -140,6 +140,23 @@ where
         let mut buffer = String::new();
         let mut tmp_writer = Writer::new(&mut buffer);
 
+        // Strip everything before src/ in the filepath
+        let file_path = event
+            .metadata()
+            .file()
+            .map(|path| {
+                let path = PathBuf::from(path);
+
+                if let Some(pos) = path.components().position(|c| c.as_os_str() == "src") {
+                    path.components().skip(pos).collect::<PathBuf>()
+                } else {
+                    path
+                }
+                .to_string_lossy()
+                .into_owned()
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+
         // We deliberately use fixed .9 digit precision followed by Zulu as
         // InfluxDB seems to have a few issues with parsing timezones, offsets,
         // and nanoseconds.
@@ -153,7 +170,7 @@ where
             self.os_version,
             var("TELEMETRY_PKG_NAME").unwrap_or("unknown".to_string()),
             var("TELEMETRY_PKG_VERSION").unwrap_or("unknown".to_string()),
-            event.metadata().file().unwrap_or("unknown"),
+            file_path,
             self.trace_id,
         )?;
 
