@@ -14,7 +14,10 @@ use std::{
     os::fd::AsRawFd,
     path::{Path, PathBuf},
     process::exit,
-    sync::{atomic::{AtomicBool, Ordering}, LazyLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        LazyLock,
+    },
     time::Duration,
 };
 use sysinfo::{MemoryRefreshKind, System};

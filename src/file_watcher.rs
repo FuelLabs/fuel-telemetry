@@ -14,7 +14,10 @@ use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::exit,
-    sync::{atomic::{AtomicBool, Ordering}, LazyLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        LazyLock,
+    },
     thread::sleep,
     time::Duration,
 };
