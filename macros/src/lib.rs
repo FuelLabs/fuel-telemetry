@@ -2,6 +2,8 @@ use quote::quote;
 
 extern crate proc_macro;
 
+const LOG_FILTER: &str = "RUST_LOG";
+
 // Sets environment variables from the cargo target's perspective
 //
 // These values need to come from the cargo target which can only be found
@@ -70,7 +72,18 @@ pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         {
             #env_vars
 
-            fuel_telemetry::TelemetryLayer::__new()
+            fuel_telemetry::TelemetryLayer::__new().and_then(|(layer, guard)| {
+                use fuel_telemetry::__reexport_EnvFilter;
+                use fuel_telemetry::__reexport_Layer;
+
+                std::env::var_os(#LOG_FILTER)
+                    .map_or_else(
+                        || Ok(__reexport_EnvFilter::new("info")),
+                        |_| __reexport_EnvFilter::try_from_default_env()
+                            .map_err(|e| fuel_telemetry::TelemetryError::InvalidEnvFilter(e.to_string()))
+                    )
+                    .map(|filter| (layer.__inner.with_filter(filter), guard))
+            })
         }
     }
     .into()
@@ -99,15 +112,12 @@ pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// ```
 #[proc_macro]
 pub fn new_with_watchers(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let env_vars = set_env_vars();
     let start_watchers = start_watchers();
 
     quote! {
         {
-            #env_vars
             #start_watchers
-
-            fuel_telemetry::TelemetryLayer::__new()
+            fuel_telemetry::new!()
         }
     }
     .into()
@@ -160,22 +170,15 @@ pub fn new_with_watchers_and_init(_input: proc_macro::TokenStream) -> proc_macro
         .into();
     }
 
-    let env_vars = set_env_vars();
-    let start_watchers = start_watchers();
-
     quote! {
         {
-            #env_vars
-            #start_watchers
-
-            fuel_telemetry::TelemetryLayer::__new().map(|(layer, guard)| {
+            fuel_telemetry::new!().map(|(layer, guard)| {
+                use fuel_telemetry::__reexport_SubscriberInitExt;
                 use fuel_telemetry::__reexport_tracing_subscriber;
                 use fuel_telemetry::__reexport_tracing_subscriber_SubscriberExt;
-                use fuel_telemetry::__reexport_tracing_subscriber_SubscriberInitExt;
-                use fuel_telemetry::__reexport_WorkerGuard;
 
                 __reexport_tracing_subscriber::registry()
-                    .with(layer.__inner)
+                    .with(layer)
                     .init();
 
                 guard

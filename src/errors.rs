@@ -27,6 +27,8 @@ pub enum TelemetryError {
     InvalidConfig(String),
     #[error("Invalid client")]
     InvalidClient,
+    #[error("Invalid 'RUST_LOG' filter: {0}")]
+    InvalidEnvFilter(String),
     #[error("Home directory is invalid: {0}")]
     InvalidHomeDir(String),
     #[error("Log directory is invalid: {0}")]
