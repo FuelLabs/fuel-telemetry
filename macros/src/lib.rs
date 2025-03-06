@@ -12,8 +12,18 @@ const LOG_FILTER: &str = "RUST_LOG";
 // expanded leading to the constant value "fuel-telemetry" for all targets
 fn set_env_vars() -> proc_macro2::TokenStream {
     quote! {
+        let mut exe_name = String::from("unknown");
+
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(name) = exe.file_name() {
+                if let Some(name_str) = name.to_str() {
+                    exe_name = name_str.to_string().replace(':', "_");
+                }
+            }
+        }
+
         if std::env::var("TELEMETRY_PKG_NAME").is_err() {
-            std::env::set_var("TELEMETRY_PKG_NAME", env!("CARGO_PKG_NAME"));
+            std::env::set_var("TELEMETRY_PKG_NAME", exe_name);
         }
 
         if std::env::var("TELEMETRY_PKG_VERSION").is_err() {
