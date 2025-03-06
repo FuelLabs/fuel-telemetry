@@ -46,10 +46,11 @@ impl TelemetryFormatter {
     ///
     /// ```rust
     /// use fuel_telemetry::TelemetryFormatter;
+    /// use tracing_subscriber::{fmt::Layer, Registry};
     ///
     /// let telemetry_formatter = TelemetryFormatter::new();
     ///
-    /// tracing_subscriber::fmt::layer()
+    /// let layer = tracing_subscriber::fmt::layer::<Registry>()
     ///     .event_format(telemetry_formatter);
     /// ```
     pub fn new() -> Self {

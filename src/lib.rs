@@ -102,7 +102,7 @@ pub struct TelemetryConfig {
 /// ```rust
 /// use fuel_telemetry::telemetry_config;
 ///
-/// let telemetry_config = telemetry_config()?;
+/// let telemetry_config = telemetry_config();
 /// ```
 pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
     pub static TELEMETRY_CONFIG: LazyLock<Result<TelemetryConfig>> = LazyLock::new(|| {

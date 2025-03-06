@@ -54,7 +54,7 @@ fn start_watchers() -> proc_macro2::TokenStream {
 /// disk, they will not be sent to InfluxDB. If in doubt, prefer using
 /// `new_with_watchers!()` or `new_with_watchers_and_init!()` over `new!()`.
 ///
-/// ```rust
+/// ```text
 /// use fuel_telemetry::TelemetryLayer;
 ///
 /// let (telemetry_layer, _guard) = fuel_telemetry::new!()?;
@@ -89,7 +89,7 @@ pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// Otherwise, if you are using `fuel-telemetry` as your only `tracing`
 /// `Subscriber`, you should instead use `new_with_watchers_and_init!()`.
 ///
-/// ```rust
+/// ```text
 /// use fuel_telemetry::prelude::*;
 ///
 /// let (telemetry_layer, _guard) = fuel_telemetry::new_with_watchers!()?;
@@ -125,11 +125,11 @@ pub fn new_with_watchers(_input: proc_macro::TokenStream) -> proc_macro::TokenSt
 /// Otherwise, if you are using `fuel-telemetry` along with other `tracing`
 /// `Layer`s within your application, you should instead use `new_with_watchers!()`.
 ///
-/// ```rust
+/// ```text
 /// use fuel_telemetry::prelude::*;
 ///
 /// let (telemetry_layer, _guard) = fuel_telemetry::new_with_watchers_and_init!()?;
-/// 
+///
 /// info_telemetry!("This event will be sent to InfluxBD");
 /// ```
 #[proc_macro]
