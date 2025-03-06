@@ -11,6 +11,10 @@ description = "A tracing library to implement Fuel telemetry"
 name = "fuel_telemetry"
 path = "src/lib.rs"
 
+[workspace]
+members = ["macros"]
+default-members = [".", "macros"]
+
 [dependencies]
 macros = { path = "./macros" }
 
