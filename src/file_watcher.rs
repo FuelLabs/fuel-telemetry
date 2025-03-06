@@ -3,7 +3,11 @@ use crate::{daemonise, enforce_singleton, telemetry_config, EnvSetting, Result, 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::NaiveDateTime;
 use influxdb_line_protocol::LineProtocolBuilder;
-use nix::fcntl::{Flock, FlockArg};
+use nix::{
+    fcntl::{Flock, FlockArg},
+    sys::signal::{kill, Signal::SIGILL},
+    unistd::{getpid, Pid},
+};
 use regex::Regex;
 use reqwest::blocking::{Client, Request, RequestBuilder};
 use std::{
@@ -15,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         LazyLock,
     },
     thread::sleep,
@@ -129,6 +133,9 @@ static TELEMETRY_PAYLOAD_REGEX: LazyLock<Result<Regex>> = LazyLock::new(|| {
     )?)
 });
 
+/// The PID of the currently running `FileWatcher` daemon
+pub static PID: AtomicUsize = AtomicUsize::new(0);
+
 impl FileWatcher {
     /// Create a new `FileWatcher`
     ///
@@ -173,6 +180,10 @@ impl FileWatcher {
             return Ok(());
         }
 
+        // Record the PID of the daemon so we can kill it from tests
+        PID.store(getpid().as_raw() as usize, Ordering::Relaxed);
+
+        // Cache the client and request so we don't recreate them each time
         self.client = Some(Client::new());
         self.request = Some(
             self.client
@@ -203,6 +214,18 @@ impl FileWatcher {
             // Sleep for the configured interval before polling again
             sleep(config()?.poll_interval);
         }
+    }
+
+    /// Kill the `FileWatcher` daemon if one is running
+    pub fn kill() -> Result<()> {
+        let pid = PID.load(Ordering::Relaxed);
+
+        if pid != 0 {
+            kill(Pid::from_raw(pid as i32), SIGILL)?;
+            PID.store(0, Ordering::Relaxed);
+        }
+
+        Ok(())
     }
 
     /// Poll for aged-out telemetry files

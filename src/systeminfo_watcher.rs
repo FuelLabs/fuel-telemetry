@@ -5,8 +5,12 @@ use crate::{
 
 use nix::{
     fcntl::{Flock, FlockArg},
-    sys::stat::fstat,
+    sys::{
+        signal::{kill, Signal::SIGILL},
+        stat::fstat,
+    },
     time::ClockId,
+    unistd::{getpid, Pid},
 };
 use std::{
     env::{set_var, var},
@@ -15,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         LazyLock,
     },
     time::Duration,
@@ -69,6 +73,9 @@ fn config() -> Result<&'static SystemInfoWatcherConfig> {
 // with the other watchers
 pub struct SystemInfoWatcher;
 
+/// The PID of the currently running `SystemInfoWatcher` daemon
+pub static PID: AtomicUsize = AtomicUsize::new(0);
+
 impl SystemInfoWatcher {
     pub fn new() -> Result<Self> {
         Ok(Self {})
@@ -96,6 +103,9 @@ impl SystemInfoWatcher {
             return Ok(());
         }
 
+        // Record the PID of the daemon so we can kill it from tests
+        PID.store(getpid().as_raw() as usize, Ordering::Relaxed);
+
         // Warning: We need to create the `TelemetryLayer` after daemonising
         // as there is a race condition in the thread runtime of `tracing` and
         // the tokio runtime of `Reqwest`. Swapping order of the two could lead to
@@ -114,6 +124,18 @@ impl SystemInfoWatcher {
         self.poll_systeminfo()?;
 
         exit(0);
+    }
+
+    /// Kill the `SystemInfoWatcher` daemon if one is running
+    pub fn kill() -> Result<()> {
+        let pid = PID.load(Ordering::Relaxed);
+
+        if pid != 0 {
+            kill(Pid::from_raw(pid as i32), SIGILL)?;
+            PID.store(0, Ordering::Relaxed);
+        }
+
+        Ok(())
     }
 
     fn poll_systeminfo(&self) -> Result<()> {
