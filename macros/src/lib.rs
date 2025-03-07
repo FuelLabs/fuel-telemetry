@@ -182,7 +182,7 @@ pub fn new_with_watchers_and_init(_input: proc_macro::TokenStream) -> proc_macro
 
     quote! {
         {
-            fuel_telemetry::new!().map(|(layer, guard)| {
+            fuel_telemetry::new_with_watchers!().map(|(layer, guard)| {
                 use fuel_telemetry::__reexport_SubscriberInitExt;
                 use fuel_telemetry::__reexport_tracing_subscriber;
                 use fuel_telemetry::__reexport_tracing_subscriber_SubscriberExt;
