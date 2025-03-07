@@ -101,3 +101,24 @@ impl From<reqwest::Error> for TelemetryError {
         Self::Reqwest(err.to_string())
     }
 }
+
+#[derive(Debug)]
+pub enum WatcherError {
+    Recoverable(TelemetryError),
+    Fatal(TelemetryError),
+}
+
+impl From<TelemetryError> for WatcherError {
+    fn from(err: TelemetryError) -> Self {
+        // Default to fatal, then be explicit about recoverable errors
+        WatcherError::Fatal(err)
+    }
+}
+
+pub fn into_fatal<E: Into<TelemetryError>>(err: E) -> WatcherError {
+    WatcherError::Fatal(err.into())
+}
+
+pub fn into_recoverable<E: Into<TelemetryError>>(err: E) -> WatcherError {
+    WatcherError::Recoverable(err.into())
+}

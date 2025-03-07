@@ -4,7 +4,7 @@ pub mod systeminfo_watcher;
 pub mod telemetry_formatter;
 pub mod telemetry_layer;
 
-pub use errors::TelemetryError;
+pub use errors::{into_fatal, into_recoverable, TelemetryError, WatcherError};
 pub use macros::{new, new_with_watchers, new_with_watchers_and_init};
 pub use telemetry_formatter::TelemetryFormatter;
 pub use telemetry_layer::TelemetryLayer;
@@ -45,6 +45,9 @@ use std::{
 
 // Result type for the crate
 pub type Result<T> = std::result::Result<T, TelemetryError>;
+
+// Result type from Watchers
+pub type WatcherResult<T> = std::result::Result<T, WatcherError>;
 
 //
 // Crate static configuration
@@ -291,14 +294,22 @@ pub(crate) fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
 ///
 /// This function forks and has the parent immediately return. The forked off
 /// child then follows the common "double-fork" method of daemonising.
-pub(crate) fn daemonise(log_filename: &PathBuf) -> Result<bool> {
-    stdout().flush()?;
-    stderr().flush()?;
+pub(crate) fn daemonise(log_filename: &PathBuf) -> WatcherResult<bool> {
+    // All errors before the first fork() are recoverable from the caller,
+    // meaning that the error occured within the same process and should be
+    // ignored by the caller so that it can continue
+
+    stdout().flush().map_err(into_recoverable)?;
+    stderr().flush().map_err(into_recoverable)?;
 
     // Return if we are the parent
-    if unsafe { fork()? }.is_parent() {
+    if unsafe { fork().map_err(into_recoverable)? }.is_parent() {
         return Ok(true);
     };
+
+    // From here on, we are no longer the original process, so the caller should
+    // treat errors as fatal. This means that on error the process should exit
+    // immediately as there should not be two identical flows of execution
 
     // To prevent us from becoming a zombie when we die, we fork then kill the
     // parent so that we are immediately inherited by init/systemd. Doing so, we
@@ -306,36 +317,37 @@ pub(crate) fn daemonise(log_filename: &PathBuf) -> Result<bool> {
     //
     // Also, doing this guarantees that we are not the group leader, which is
     // required to create a new session (i.e setsid() will fail otherwise)
-    if unsafe { fork()? }.is_parent() {
+    if unsafe { fork().map_err(into_fatal)? }.is_parent() {
         exit(0);
     }
 
     // Creating a new session means we won't receive signals to the original
     // group or session (e.g. hitting CTRL-C to break a command pipeline)
-    setsid()?;
+    setsid().map_err(into_fatal)?;
 
     // As session leader, we now fork then follow the child again to guarantee
     // we cannot re-acquire a terminal
-    if unsafe { fork()? }.is_parent() {
+    if unsafe { fork().map_err(into_fatal)? }.is_parent() {
         exit(0);
     }
 
     // Setup stdio to write errors to the logfile while discarding any IO to
     // the controlling terminal
     setup_stdio(
-        Path::new(&telemetry_config()?.fuelup_tmp)
+        Path::new(&telemetry_config().map_err(into_fatal)?.fuelup_tmp)
             .join(log_filename)
             .to_str()
             .ok_or(TelemetryError::InvalidLogFile(
-                telemetry_config()?.fuelup_tmp.clone(),
+                telemetry_config().map_err(into_fatal)?.fuelup_tmp.clone(),
                 log_filename.clone(),
-            ))?,
+            ))
+            .map_err(into_fatal)?,
     )?;
 
     // The current working directory needs to be set to root so that we don't
     // prevent any unmounting of the filesystem leading up to the directory we
     // started in
-    chdir("/")?;
+    chdir("/").map_err(into_fatal)?;
 
     // We close all file descriptors since any currently opened were inherited
     // from the parent process which we don't care about. Not doing so leaks
@@ -343,12 +355,14 @@ pub(crate) fn daemonise(log_filename: &PathBuf) -> Result<bool> {
 
     // Skip the first three because we deal with stdio later. Here, 1024 is a
     // safe value i.e MIN(Legacy Linux, MacOS)
-    let max_fd = sysconf(SysconfVar::OPEN_MAX)?.unwrap_or(1024) as i32;
+    let max_fd = sysconf(SysconfVar::OPEN_MAX)
+        .map_err(into_fatal)?
+        .unwrap_or(1024) as i32;
 
     for fd in 3..=max_fd {
         match close(fd) {
             Ok(()) | Err(Errno::EBADF) => {}
-            Err(e) => return Err(TelemetryError::from(e)),
+            Err(e) => Err(into_fatal(e))?,
         }
     }
 

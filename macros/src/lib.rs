@@ -43,13 +43,19 @@ fn set_env_vars() -> proc_macro2::TokenStream {
 // telemetry should not impede the program from running.
 fn start_watchers() -> proc_macro2::TokenStream {
     quote! {
-        let _ = fuel_telemetry::file_watcher::FileWatcher::new()
-            .and_then(|mut f| f.start())
-            .map_err(|_| std::process::exit(0));
+        // Start the `FileWatcher` and only care about fatal errors
+        if let Ok(mut file_watcher) = fuel_telemetry::file_watcher::FileWatcher::new() {
+            if let Err(fuel_telemetry::errors::WatcherError::Fatal(_)) = file_watcher.start() {
+                std::process::exit(1);
+            }
+        }
 
-        let _ = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new()
-            .and_then(|mut s| s.start())
-            .map_err(|_| std::process::exit(0));
+        // Start the `SystemInfoWatcher` and only care about fatal errors
+        if let Ok(mut systeminfo_watcher) = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new() {
+            if let Err(fuel_telemetry::errors::WatcherError::Fatal(_)) = systeminfo_watcher.start() {
+                std::process::exit(1);
+            }
+        }
     }
 }
 

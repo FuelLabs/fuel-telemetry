@@ -1,6 +1,7 @@
 use crate::{
-    self as fuel_telemetry, daemonise, enforce_singleton, info, new_with_watchers_and_init, span,
-    telemetry_config, EnvSetting, Level, Result, TelemetryError,
+    self as fuel_telemetry, daemonise, enforce_singleton, info, into_recoverable,
+    new_with_watchers_and_init, span, telemetry_config, EnvSetting, Level, Result, TelemetryError,
+    WatcherResult,
 };
 
 use nix::{
@@ -81,7 +82,7 @@ impl SystemInfoWatcher {
         Ok(Self {})
     }
 
-    pub fn start(&mut self) -> Result<()> {
+    pub fn start(&mut self) -> WatcherResult<()> {
         if var("FUELUP_NO_TELEMETRY").is_ok() {
             // If telemetry is disabled, immediately return
             return Ok(());
@@ -98,10 +99,14 @@ impl SystemInfoWatcher {
 
         // Even though we won't be hanging around long, we still daemonise
         // so that we don't get in the way of the calling process
-        if daemonise(&config()?.logfile)? {
+        if daemonise(&config().map_err(into_recoverable)?.logfile)? {
             // If we are the parent, immediately return
             return Ok(());
         }
+
+        // From here on, we are no longer the original process, so the caller should
+        // treat errors as fatal. This means that on error the process should exit
+        // immediately as there should not be two identical flows of execution
 
         // Record the PID of the daemon so we can kill it from tests
         PID.store(getpid().as_raw() as usize, Ordering::Relaxed);

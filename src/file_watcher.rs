@@ -1,4 +1,7 @@
-use crate::{daemonise, enforce_singleton, telemetry_config, EnvSetting, Result, TelemetryError};
+use crate::{
+    daemonise, enforce_singleton, into_fatal, into_recoverable, telemetry_config, EnvSetting,
+    Result, TelemetryError, WatcherResult,
+};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::NaiveDateTime;
@@ -160,7 +163,7 @@ impl FileWatcher {
     /// This function forks and has the parent immediately return. The forked
     /// off child then daemonises to poll for aged-out telemetry files, sending
     /// them to InfluxDB, and exits once there are no more files to process.
-    pub fn start(&mut self) -> Result<()> {
+    pub fn start(&mut self) -> WatcherResult<()> {
         if var("FUELUP_NO_TELEMETRY").is_ok() {
             // If telemetry is disabled, immediately return
             return Ok(());
@@ -175,10 +178,14 @@ impl FileWatcher {
             STARTED.store(true, Ordering::Relaxed);
         }
 
-        if daemonise(&config()?.logfile)? {
+        if daemonise(&config().map_err(into_recoverable)?.logfile)? {
             // If we are the parent, immediately return
             return Ok(());
         }
+
+        // From here on, we are no longer the original process, so the caller should
+        // treat errors as fatal. This means that on error the process should exit
+        // immediately as there should not be two identical flows of execution
 
         // Record the PID of the daemon so we can kill it from tests
         PID.store(getpid().as_raw() as usize, Ordering::Relaxed);
@@ -196,7 +203,8 @@ impl FileWatcher {
                     "Authorization",
                     format!("Token {}", config()?.influxdb_token.clone()),
                 )
-                .build()?,
+                .build()
+                .map_err(into_fatal)?,
         );
 
         loop {
