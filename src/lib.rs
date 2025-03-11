@@ -195,8 +195,8 @@ pub fn telemetry_config() -> Result<&'static TelemetryConfig> {
 #[macro_export]
 macro_rules! span_telemetry {
     ($level:expr, $($arg:tt)*) => {
-        fuel_telemetry::__reexport_tracing::span!($level, "auto", telemetry = true).in_scope(|| {
-            fuel_telemetry::__reexport_tracing::event!($level, $($arg)*)
+        $crate::__reexport_tracing::span!($level, "auto", telemetry = true).in_scope(|| {
+            $crate::__reexport_tracing::event!($level, $($arg)*)
         })
     }
 }
@@ -211,7 +211,7 @@ macro_rules! span_telemetry {
 #[macro_export]
 macro_rules! error_telemetry {
     ($($arg:tt)*) => {{
-        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::ERROR, $($arg)*);
+        span_telemetry!($crate::__reexport_tracing::Level::ERROR, $($arg)*);
     }}
 }
 
@@ -225,7 +225,7 @@ macro_rules! error_telemetry {
 #[macro_export]
 macro_rules! warn_telemetry {
     ($($arg:tt)*) => {{
-        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::WARN, $($arg)*);
+        span_telemetry!($crate::__reexport_tracing::Level::WARN, $($arg)*);
     }}
 }
 
@@ -239,7 +239,7 @@ macro_rules! warn_telemetry {
 #[macro_export]
 macro_rules! info_telemetry {
     ($($arg:tt)*) => {{
-        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::INFO, $($arg)*);
+        span_telemetry!($crate::__reexport_tracing::Level::INFO, $($arg)*);
     }}
 }
 
@@ -253,7 +253,7 @@ macro_rules! info_telemetry {
 #[macro_export]
 macro_rules! debug_telemetry {
     ($($arg:tt)*) => {{
-        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::DEBUG, $($arg)*);
+        span_telemetry!($crate::__reexport_tracing::Level::DEBUG, $($arg)*);
     }}
 }
 
@@ -267,7 +267,7 @@ macro_rules! debug_telemetry {
 #[macro_export]
 macro_rules! trace_telemetry {
     ($($arg:tt)*) => {{
-        span_telemetry!(fuel_telemetry::__reexport_tracing::Level::TRACE, $($arg)*);
+        span_telemetry!($crate::__reexport_tracing::Level::TRACE, $($arg)*);
     }}
 }
 
