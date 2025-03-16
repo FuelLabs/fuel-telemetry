@@ -2,7 +2,7 @@ use base64::DecodeError;
 use std::{io, path::PathBuf, string::FromUtf8Error};
 use thiserror::Error;
 
-#[derive(Error, Clone)]
+#[derive(Error, Clone, PartialEq)]
 pub enum TelemetryError {
     //
     // External errors
@@ -55,6 +55,10 @@ pub enum TelemetryError {
     InvalidTracingRegex(#[from] regex::Error),
     #[error("Tracing payload is invalid: {0}")]
     InvalidTracingPayload(String),
+
+    // Mock error for testing
+    #[error("Mock error")]
+    Mock,
 }
 
 /// Convenience impl that dereferences the error
@@ -102,7 +106,7 @@ impl From<reqwest::Error> for TelemetryError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum WatcherError {
     Recoverable(TelemetryError),
     Fatal(TelemetryError),
