@@ -32,7 +32,7 @@ use nix::{
     errno::Errno,
     fcntl::{Flock, FlockArg},
     sys::stat,
-    unistd::{chdir, close, dup2, fork, setsid, sysconf, ForkResult, Pid, SysconfVar},
+    unistd::{chdir, close, dup2, fork, getpid, pipe, read, setsid, sysconf, ForkResult, Pid, SysconfVar, write},
 };
 use std::{
     env::{var, var_os},
@@ -347,7 +347,7 @@ impl DaemoniseHelpers for DefaultDaemoniseHelpers {}
 ///
 /// This function forks and has the parent immediately return. The forked off
 /// child then follows the common "double-fork" method of daemonising.
-pub(crate) fn daemonise(log_filename: &PathBuf) -> WatcherResult<bool> {
+pub(crate) fn daemonise(log_filename: &PathBuf) -> WatcherResult<Option<Pid>> {
     let mut helpers = DefaultDaemoniseHelpers;
     daemonise_with_helpers(log_filename, &mut helpers)
 }
@@ -355,7 +355,7 @@ pub(crate) fn daemonise(log_filename: &PathBuf) -> WatcherResult<bool> {
 pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     log_filename: &PathBuf,
     helpers: &mut H,
-) -> WatcherResult<bool> {
+) -> WatcherResult<Option<Pid>> {
     // All errors before the first fork() are recoverable from the caller,
     // meaning that the error occured within the same process and should be
     // ignored by the caller so that it can continue
@@ -363,10 +363,19 @@ pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     helpers.flush(&mut stdout()).map_err(into_recoverable)?;
     helpers.flush(&mut stderr()).map_err(into_recoverable)?;
 
+    let (read_fd, write_fd) = pipe().map_err(into_recoverable)?;
+
     // Return if we are the parent
     if helpers.fork().map_err(into_recoverable)?.is_parent() {
-        return Ok(true);
+        drop(write_fd);
+
+        let mut pid_bytes = [0u8; std::mem::size_of::<Pid>()];
+        read(read_fd.as_raw_fd(), &mut pid_bytes).map_err(into_recoverable)?;
+
+        return Ok(Some(Pid::from_raw(i32::from_ne_bytes(pid_bytes))));
     };
+
+    drop(read_fd);
 
     // From here on, we are no longer the original process, so the caller should
     // treat errors as fatal. This means that on error the process should exit
@@ -379,6 +388,7 @@ pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     // Also, doing this guarantees that we are not the group leader, which is
     // required to create a new session (i.e setsid() will fail otherwise)
     if helpers.fork().map_err(into_fatal)?.is_parent() {
+        drop(write_fd);
         exit(0);
     }
 
@@ -389,8 +399,12 @@ pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     // As session leader, we now fork then follow the child again to guarantee
     // we cannot re-acquire a terminal
     if helpers.fork().map_err(into_fatal)?.is_parent() {
+        drop(write_fd);
         exit(0);
     }
+
+    let pid = getpid();
+    write(write_fd, &pid.as_raw().to_ne_bytes()).map_err(into_fatal)?;
 
     // Setup stdio to write errors to the logfile while discarding any IO to
     // the controlling terminal
@@ -437,11 +451,8 @@ pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     // Clear the umask so that files we create aren't too permission-restricive
     stat::umask(stat::Mode::empty());
 
-    Ok(false)
+    Ok(None)
 }
-
-struct DefaultSetupStdioHelpers;
-impl SetupStdioHelpers for DefaultSetupStdioHelpers {}
 
 trait SetupStdioHelpers {
     fn create_append(&self, log_filename: &str) -> std::result::Result<File, std::io::Error> {
@@ -719,7 +730,7 @@ mod daemonise {
             }
 
             let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut FirstForkIsParent);
-            assert!(matches!(result, Ok(true)));
+            assert!(matches!(result, Ok(Some(_))));
         }
 
         #[test]
@@ -1002,7 +1013,7 @@ mod daemonise {
             }
 
             let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut CloseFailed);
-            assert!(matches!(result, Ok(false)));
+            assert!(matches!(result, Ok(None)));
         }
 
         #[test]
@@ -1039,7 +1050,7 @@ mod daemonise {
             }
 
             let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut AOk);
-            assert!(matches!(result, Ok(false)));
+            assert!(matches!(result, Ok(None)));
         }
     }
 }
