@@ -276,26 +276,21 @@ macro_rules! trace_telemetry {
 /// This function takes an advisory lock on a file, and if another process has
 /// already locked the file, it will exit the current process.
 pub(crate) fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
-    enforce_singleton_with_lock_fn(filename, |file| {
-        Flock::lock(file, FlockArg::LockExclusiveNonblock)
-    })
+    enforce_singleton_with_helpers(filename, &mut DefaultEnforceSingletonHelpers)
 }
 
 #[doc(hidden)]
-pub(crate) fn enforce_singleton_with_lock_fn<F>(filename: &Path, lock_fn: F) -> Result<Flock<File>>
-where
-    F: FnOnce(File) -> std::result::Result<Flock<File>, (File, Errno)>,
-{
-    let lockfile = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(filename)?;
+pub(crate) fn enforce_singleton_with_helpers<H: EnforceSingletonHelpers>(
+    filename: &Path,
+    helpers: &mut H,
+) -> Result<Flock<File>> {
+    let lockfile = helpers.open(filename)?;
 
-    let lock = match lock_fn(lockfile) {
+    let lock = match helpers.lock(lockfile) {
         Ok(lock) => lock,
         Err((_, Errno::EWOULDBLOCK)) => {
             // Silently exit as another process has already locked the file
-            exit(0);
+            helpers.exit(0);
         }
         Err((_, e)) => return Err(TelemetryError::from(e)),
     };
@@ -303,45 +298,22 @@ where
     Ok(lock)
 }
 
-pub(crate) trait DaemoniseHelpers {
-    fn flush<T: Write + std::os::fd::AsRawFd>(
-        &mut self,
-        stream: &mut T,
-    ) -> std::result::Result<(), std::io::Error> {
-        stream.flush()
+trait EnforceSingletonHelpers {
+    fn open(&self, filename: &Path) -> std::result::Result<File, std::io::Error> {
+        OpenOptions::new().create(true).append(true).open(filename)
     }
 
-    fn fork(&mut self) -> nix::Result<ForkResult> {
-        unsafe { fork() }
+    fn lock(&self, file: File) -> std::result::Result<Flock<File>, (File, Errno)> {
+        Flock::lock(file, FlockArg::LockExclusiveNonblock)
     }
 
-    fn setsid(&self) -> nix::Result<Pid> {
-        setsid()
-    }
-
-    fn setup_stdio(&self, log_filename: &str) -> std::result::Result<(), TelemetryError> {
-        setup_stdio(log_filename)
-    }
-
-    fn telemetry_config(&mut self) -> Result<&'static TelemetryConfig> {
-        telemetry_config()
-    }
-
-    fn chdir(&self, path: &Path) -> nix::Result<()> {
-        chdir(path)
-    }
-
-    fn sysconf(&self, var: SysconfVar) -> nix::Result<Option<c_long>> {
-        sysconf(var)
-    }
-
-    fn close(&self, fd: c_int) -> nix::Result<()> {
-        close(fd)
+    fn exit(&self, status: i32) -> ! {
+        exit(status)
     }
 }
 
-struct DefaultDaemoniseHelpers;
-impl DaemoniseHelpers for DefaultDaemoniseHelpers {}
+struct DefaultEnforceSingletonHelpers;
+impl EnforceSingletonHelpers for DefaultEnforceSingletonHelpers {}
 
 /// Daemonise the current process
 ///
@@ -592,56 +564,102 @@ mod telemetry_config {
 #[cfg(test)]
 mod enforce_singleton {
     use super::*;
+    use nix::unistd::ForkResult;
     use rusty_fork::rusty_fork_test;
-    use std::env::{current_exe, set_var, var};
-    use std::process::Command;
-    use tempfile::tempdir;
+    use std::os::fd::OwnedFd;
+
+    fn setup_lockfile() -> PathBuf {
+        let lockfile = format!("{}/test.lock", telemetry_config().unwrap().fuelup_tmp);
+
+        File::create(&lockfile).unwrap();
+        PathBuf::from(lockfile)
+    }
 
     rusty_fork_test! {
         #[test]
-        fn invalid_filename() {
-            let result = enforce_singleton(Path::new("/"));
-            assert!(matches!(result, Err(TelemetryError::IO(_))));
+        fn lockfile_open_failed() {
+            struct LockfileOpenFailed;
+
+            impl EnforceSingletonHelpers for LockfileOpenFailed {
+                fn open(&self, _filename: &Path) -> std::result::Result<File, std::io::Error> {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "Mock error",
+                    ))
+                }
+            }
+
+            assert_eq!(
+                enforce_singleton_with_helpers(Path::new("test.lock"), &mut LockfileOpenFailed)
+                    .err(),
+                Some(TelemetryError::IO("Mock error".to_string()))
+            );
         }
 
         #[test]
         fn flock_ewouldblock() {
-            let tmpdir = tempdir().unwrap();
-            set_var("FUELUP_HOME", tmpdir.path().to_str().unwrap());
+            setup_fuelup_home();
+            let lockfile = setup_lockfile();
 
-            // Take the lock for the parent and child
-            let result = enforce_singleton(&Path::new(&telemetry_config().unwrap().fuelup_tmp).join("test.lock"));
+            struct FlockEWouldblock {
+                write_fd: OwnedFd,
+            }
 
-            if var("RECURSION").unwrap_or_default() != "true" {
-                // Testing the first time calling `enforce_singleton()`
-                assert!(result.is_ok());
+            impl EnforceSingletonHelpers for FlockEWouldblock {
+                fn lock(&self, file: File) -> std::result::Result<Flock<File>, (File, Errno)> {
+                    Err((file, Errno::EWOULDBLOCK))
+                }
 
-                let result = Command::new(current_exe().unwrap())
-                    .env("FUELUP_HOME", tmpdir.path().to_str().unwrap())
-                    .env("RECURSION", "true")
-                    .arg("--test")
-                    .arg("enforce_singleton::flock_ewouldblock")
-                    .arg("--")
-                    .arg("--nocapture")
-                    .status()
-                    .unwrap();
+                fn exit(&self, _status: i32) -> ! {
+                    // Test we exited at the expected code path
+                    let pid = getpid();
+                    write(&self.write_fd, &pid.as_raw().to_ne_bytes()).unwrap();
 
-                // Testing the second time calling `enforce_singleton()` (i.e.from the child)
-                assert!(result.success());
+                    exit(0);
+                }
+            }
+
+            let (read_fd, write_fd) = pipe().unwrap();
+
+            match unsafe { fork() }.unwrap() {
+                ForkResult::Parent { child } => {
+                    drop(write_fd);
+
+                    let mut pid_bytes = [0u8; std::mem::size_of::<Pid>()];
+                    read(read_fd.as_raw_fd(), &mut pid_bytes).unwrap();
+
+                    assert_eq!(pid_bytes, child.as_raw().to_ne_bytes());
+                }
+                ForkResult::Child => {
+                    drop(read_fd);
+
+                    let mut flock_ewouldblock = FlockEWouldblock { write_fd };
+
+                    enforce_singleton_with_helpers(&lockfile, &mut flock_ewouldblock).unwrap();
+
+                    // Fallback exit
+                    exit(99);
+                }
             }
         }
 
         #[test]
         fn flock_other_error() {
             setup_fuelup_home();
+            let lockfile = setup_lockfile();
 
-            let path = Path::new(&telemetry_config().unwrap().fuelup_tmp).join("test.lock");
+            struct FlockOtherError;
 
-            let result = enforce_singleton_with_lock_fn(&path, |file| {
-                Err((file, Errno::EOWNERDEAD))
-            });
+            impl EnforceSingletonHelpers for FlockOtherError {
+                fn lock(&self, file: File) -> std::result::Result<Flock<File>, (File, Errno)> {
+                    Err((file, Errno::EOWNERDEAD))
+                }
+            }
 
-            assert!(result.is_err());
+            let result = enforce_singleton_with_helpers(&lockfile, &mut FlockOtherError);
+
+            let expected = TelemetryError::Nix(Errno::EOWNERDEAD.to_string());
+            assert_eq!(result.err(), Some(expected));
         }
     }
 }
