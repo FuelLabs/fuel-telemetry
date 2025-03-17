@@ -500,18 +500,23 @@ mod env_setting {
 mod telemetry_config {
     use super::*;
     use rusty_fork::rusty_fork_test;
-    use std::env::set_var;
-    use std::path::Path;
+    use std::{env::set_var, path::Path};
     use tempfile::tempdir;
 
     rusty_fork_test! {
         #[test]
         fn fuelup_all_unset() {
             let telemetry_config = telemetry_config().unwrap();
-
             let fuelup_home = home_dir().unwrap();
-            assert_eq!(telemetry_config.fuelup_tmp, fuelup_home.join(".fuelup/tmp").to_str().unwrap());
-            assert_eq!(telemetry_config.fuelup_log, fuelup_home.join(".fuelup/log").to_str().unwrap());
+
+            assert_eq!(
+                telemetry_config.fuelup_tmp,
+                fuelup_home.join(".fuelup/tmp").to_str().unwrap()
+            );
+            assert_eq!(
+                telemetry_config.fuelup_log,
+                fuelup_home.join(".fuelup/log").to_str().unwrap()
+            );
 
             assert!(Path::new(&telemetry_config.fuelup_tmp).is_dir());
             assert!(Path::new(&telemetry_config.fuelup_log).is_dir());
@@ -524,8 +529,14 @@ mod telemetry_config {
 
             let telemetry_config = telemetry_config().unwrap();
 
-            assert_eq!(telemetry_config.fuelup_tmp, tmpdir.path().join("tmp").to_str().unwrap());
-            assert_eq!(telemetry_config.fuelup_log, tmpdir.path().join("log").to_str().unwrap());
+            assert_eq!(
+                telemetry_config.fuelup_tmp,
+                tmpdir.path().join("tmp").to_str().unwrap()
+            );
+            assert_eq!(
+                telemetry_config.fuelup_log,
+                tmpdir.path().join("log").to_str().unwrap()
+            );
 
             assert!(Path::new(&telemetry_config.fuelup_tmp).is_dir());
             assert!(Path::new(&telemetry_config.fuelup_log).is_dir());
@@ -539,7 +550,10 @@ mod telemetry_config {
             let telemetry_config = telemetry_config().unwrap();
 
             assert_eq!(telemetry_config.fuelup_tmp, tmpdir.path().to_str().unwrap());
-            assert_eq!(telemetry_config.fuelup_log, home_dir().unwrap().join(".fuelup/log").to_str().unwrap());
+            assert_eq!(
+                telemetry_config.fuelup_log,
+                home_dir().unwrap().join(".fuelup/log").to_str().unwrap()
+            );
 
             assert!(Path::new(&telemetry_config.fuelup_tmp).is_dir());
             assert!(Path::new(&telemetry_config.fuelup_log).is_dir());
@@ -552,7 +566,10 @@ mod telemetry_config {
 
             let telemetry_config = telemetry_config().unwrap();
 
-            assert_eq!(telemetry_config.fuelup_tmp, home_dir().unwrap().join(".fuelup/tmp").to_str().unwrap());
+            assert_eq!(
+                telemetry_config.fuelup_tmp,
+                home_dir().unwrap().join(".fuelup/tmp").to_str().unwrap()
+            );
             assert_eq!(telemetry_config.fuelup_log, tmpdir.path().to_str().unwrap());
 
             assert!(Path::new(&telemetry_config.fuelup_tmp).is_dir());
@@ -1097,8 +1114,11 @@ mod setup_stdio {
                 }
             }
 
-            let result = setup_stdio_with_helpers(&format!("{}/test.log",
-                telemetry_config().unwrap().fuelup_log), &mut CreateAppendFailed);
+            let result = setup_stdio_with_helpers(
+                &format!("{}/test.log", telemetry_config().unwrap().fuelup_log),
+                &mut CreateAppendFailed,
+            );
+
             assert!(matches!(result, Err(TelemetryError::IO(_))));
         }
 
@@ -1119,8 +1139,11 @@ mod setup_stdio {
                 }
             }
 
-            let result = setup_stdio_with_helpers(&format!("{}/test.log",
-                telemetry_config().unwrap().fuelup_log), &mut FirstDup2Failed);
+            let result = setup_stdio_with_helpers(
+                &format!("{}/test.log", telemetry_config().unwrap().fuelup_log),
+                &mut FirstDup2Failed,
+            );
+
             assert!(matches!(result, Err(TelemetryError::Nix(_))));
         }
 
@@ -1139,8 +1162,11 @@ mod setup_stdio {
                 }
             }
 
-            let result = setup_stdio_with_helpers(&format!("{}/test.log",
-                telemetry_config().unwrap().fuelup_log), &mut ReadWriteFailed);
+            let result = setup_stdio_with_helpers(
+                &format!("{}/test.log", telemetry_config().unwrap().fuelup_log),
+                &mut ReadWriteFailed,
+            );
+
             assert!(matches!(result, Err(TelemetryError::IO(_))));
         }
 
@@ -1170,8 +1196,11 @@ mod setup_stdio {
                 }
             }
 
-            let result = setup_stdio_with_helpers(&format!("{}/test.log",
-                telemetry_config().unwrap().fuelup_log), &mut SecondDup2Failed::default());
+            let result = setup_stdio_with_helpers(
+                &format!("{}/test.log", telemetry_config().unwrap().fuelup_log),
+                &mut SecondDup2Failed::default(),
+            );
+
             assert!(matches!(result, Err(TelemetryError::Nix(_))));
         }
 
@@ -1201,8 +1230,11 @@ mod setup_stdio {
                 }
             }
 
-            let result = setup_stdio_with_helpers(&format!("{}/test.log",
-                telemetry_config().unwrap().fuelup_log), &mut ThirdDup2Failed::default());
+            let result = setup_stdio_with_helpers(
+                &format!("{}/test.log", telemetry_config().unwrap().fuelup_log),
+                &mut ThirdDup2Failed::default(),
+            );
+
             assert!(matches!(result, Err(TelemetryError::Nix(_))));
         }
 
@@ -1210,8 +1242,11 @@ mod setup_stdio {
         fn ok() {
             setup_fuelup_home();
 
-            let result = setup_stdio_with_helpers(&format!("{}/test.log",
-                telemetry_config().unwrap().fuelup_log), &mut DefaultSetupStdioHelpers);
+            let result = setup_stdio_with_helpers(
+                &format!("{}/test.log", telemetry_config().unwrap().fuelup_log),
+                &mut DefaultSetupStdioHelpers,
+            );
+
             assert!(matches!(result, Ok(())));
         }
     }
