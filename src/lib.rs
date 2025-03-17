@@ -283,9 +283,9 @@ pub(crate) fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
 }
 
 #[doc(hidden)]
-pub(crate) fn enforce_singleton_with_helpers<H: EnforceSingletonHelpers>(
+pub(crate) fn enforce_singleton_with_helpers(
     filename: &Path,
-    helpers: &mut H,
+    helpers: &mut impl EnforceSingletonHelpers,
 ) -> Result<Flock<File>> {
     let lockfile = helpers.open(filename)?;
 
@@ -327,9 +327,9 @@ pub(crate) fn daemonise(log_filename: &PathBuf) -> WatcherResult<Option<Pid>> {
     daemonise_with_helpers(log_filename, &mut helpers)
 }
 
-pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
+pub(crate) fn daemonise_with_helpers(
     log_filename: &PathBuf,
-    helpers: &mut H,
+    helpers: &mut impl DaemoniseHelpers,
 ) -> WatcherResult<Option<Pid>> {
     // All errors before the first fork() are recoverable from the caller,
     // meaning that the error occured within the same process and should be
@@ -511,9 +511,9 @@ pub(crate) fn setup_stdio(log_filename: &str) -> std::result::Result<(), Telemet
     setup_stdio_with_helpers(log_filename, &mut helpers)
 }
 
-pub(crate) fn setup_stdio_with_helpers<S: SetupStdioHelpers>(
+pub(crate) fn setup_stdio_with_helpers(
     log_filename: &str,
-    helpers: &mut S,
+    helpers: &mut impl SetupStdioHelpers,
 ) -> std::result::Result<(), TelemetryError> {
     let log_file = helpers.create_append(log_filename)?;
 

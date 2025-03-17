@@ -509,13 +509,10 @@ fn find_telemetry_files(ignore_age: bool) -> Result<Vec<PathBuf>> {
     find_telemetry_files_with_read_dir_fn(ignore_age, |path| read_dir(path))
 }
 
-fn find_telemetry_files_with_read_dir_fn<F>(
+fn find_telemetry_files_with_read_dir_fn(
     ignore_age: bool,
-    read_dir_fn: F,
-) -> Result<Vec<PathBuf>>
-where
-    F: FnOnce(&str) -> std::result::Result<ReadDir, std::io::Error>,
-{
+    read_dir_fn: impl FnOnce(&str) -> std::result::Result<ReadDir, std::io::Error>,
+) -> Result<Vec<PathBuf>> {
     let poll_interval = config()?.poll_interval;
     let telemetry_dir = &telemetry_config()?.fuelup_tmp;
 
