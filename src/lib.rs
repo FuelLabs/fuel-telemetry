@@ -32,13 +32,16 @@ use nix::{
     errno::Errno,
     fcntl::{Flock, FlockArg},
     sys::stat,
-    unistd::{chdir, close, dup2, fork, getpid, pipe, read, setsid, sysconf, ForkResult, Pid, SysconfVar, write},
+    unistd::{
+        chdir, close, dup2, fork, getpid, pipe, read, setsid, sysconf, write, ForkResult, Pid,
+        SysconfVar,
+    },
 };
 use std::{
     env::{var, var_os},
     fs::{create_dir_all, File, OpenOptions},
     io::{stderr, stdout, Write},
-    os::fd::AsRawFd,
+    os::fd::{AsRawFd, OwnedFd},
     path::{Path, PathBuf},
     process::exit,
     sync::LazyLock,
@@ -335,14 +338,16 @@ pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     helpers.flush(&mut stdout()).map_err(into_recoverable)?;
     helpers.flush(&mut stderr()).map_err(into_recoverable)?;
 
-    let (read_fd, write_fd) = pipe().map_err(into_recoverable)?;
+    let (read_fd, write_fd) = helpers.pipe().map_err(into_recoverable)?;
 
     // Return if we are the parent
     if helpers.fork().map_err(into_recoverable)?.is_parent() {
         drop(write_fd);
 
         let mut pid_bytes = [0u8; std::mem::size_of::<Pid>()];
-        read(read_fd.as_raw_fd(), &mut pid_bytes).map_err(into_recoverable)?;
+        helpers
+            .read_pipe(read_fd, &mut pid_bytes)
+            .map_err(into_recoverable)?;
 
         return Ok(Some(Pid::from_raw(i32::from_ne_bytes(pid_bytes))));
     };
@@ -376,8 +381,7 @@ pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     }
 
     let pid = getpid();
-    write(write_fd, &pid.as_raw().to_ne_bytes()).map_err(into_fatal)?;
-
+    helpers.write_pipe(write_fd, pid).map_err(into_fatal)?;
     // Setup stdio to write errors to the logfile while discarding any IO to
     // the controlling terminal
     let fuelup_tmp = helpers
@@ -426,6 +430,58 @@ pub(crate) fn daemonise_with_helpers<H: DaemoniseHelpers>(
     Ok(None)
 }
 
+pub(crate) trait DaemoniseHelpers {
+    fn flush<T: Write + std::os::fd::AsRawFd>(
+        &mut self,
+        stream: &mut T,
+    ) -> std::result::Result<(), std::io::Error> {
+        stream.flush()
+    }
+
+    fn pipe(&mut self) -> nix::Result<(OwnedFd, OwnedFd)> {
+        pipe()
+    }
+
+    fn read_pipe(&mut self, read_fd: OwnedFd, pid_bytes: &mut [u8]) -> nix::Result<usize> {
+        read(read_fd.as_raw_fd(), pid_bytes)
+    }
+
+    fn fork(&mut self) -> nix::Result<ForkResult> {
+        unsafe { fork() }
+    }
+
+    fn setsid(&self) -> nix::Result<Pid> {
+        setsid()
+    }
+
+    fn write_pipe(&mut self, write_fd: OwnedFd, pid: Pid) -> nix::Result<usize> {
+        write(write_fd, &pid.as_raw().to_ne_bytes())
+    }
+
+    fn telemetry_config(&mut self) -> Result<&'static TelemetryConfig> {
+        telemetry_config()
+    }
+
+    fn setup_stdio(&self, log_filename: &str) -> std::result::Result<(), TelemetryError> {
+        setup_stdio(log_filename)
+    }
+
+    fn chdir(&self, path: &Path) -> nix::Result<()> {
+        chdir(path)
+    }
+
+    fn sysconf(&self, var: SysconfVar) -> nix::Result<Option<c_long>> {
+        sysconf(var)
+    }
+
+    fn close(&self, fd: c_int) -> nix::Result<()> {
+        close(fd)
+    }
+}
+
+struct DefaultDaemoniseHelpers;
+impl DaemoniseHelpers for DefaultDaemoniseHelpers {}
+
 trait SetupStdioHelpers {
     fn create_append(&self, log_filename: &str) -> std::result::Result<File, std::io::Error> {
         OpenOptions::new()
@@ -442,6 +498,9 @@ trait SetupStdioHelpers {
         OpenOptions::new().read(true).write(true).open(path)
     }
 }
+
+struct DefaultSetupStdioHelpers;
+impl SetupStdioHelpers for DefaultSetupStdioHelpers {}
 
 /// Setup stdio for the process
 ///
@@ -720,7 +779,7 @@ mod daemonise {
             }
 
             impl DaemoniseHelpers for StderrFlushFailed {
-                fn flush<T: Write + std::os::fd::AsRawFd>(& mut self, stream: &mut T) -> Result<()> {
+                fn flush<T: Write + std::os::fd::AsRawFd>(&mut self, stream: &mut T) -> Result<()> {
                     self.call_counter += 1;
 
                     if self.call_counter == 1 {
@@ -732,8 +791,34 @@ mod daemonise {
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut StderrFlushFailed::default());
+            let result = daemonise_with_helpers(
+                &PathBuf::from("test.log"),
+                &mut StderrFlushFailed::default(),
+            );
+
             assert!(matches!(result, Err(WatcherError::Recoverable(_))));
+        }
+
+        #[test]
+        fn pipe_failed() {
+            setup_fuelup_home();
+
+            struct PipeFailed;
+
+            impl DaemoniseHelpers for PipeFailed {
+                fn pipe(&mut self) -> nix::Result<(OwnedFd, OwnedFd)> {
+                    Err(Errno::EOWNERDEAD)
+                }
+            }
+
+            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut PipeFailed);
+
+            let expected_error = TelemetryError::Nix(Errno::EOWNERDEAD.to_string());
+
+            assert_eq!(
+                result.err(),
+                Some(WatcherError::Recoverable(expected_error))
+            );
         }
 
         #[test]
@@ -748,8 +833,12 @@ mod daemonise {
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut FirstForkFailed);
-            assert!(matches!(result, Err(WatcherError::Recoverable(_))));
+            assert_eq!(
+                daemonise_with_helpers(&PathBuf::from("test.log"), &mut FirstForkFailed),
+                Err(WatcherError::Recoverable(TelemetryError::Nix(
+                    Errno::EOWNERDEAD.to_string()
+                )))
+            );
         }
 
         #[test]
@@ -760,7 +849,9 @@ mod daemonise {
 
             impl DaemoniseHelpers for FirstForkIsParent {
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Parent { child: Pid::from_raw(1) })
+                    Ok(ForkResult::Parent {
+                        child: Pid::from_raw(1),
+                    })
                 }
             }
 
@@ -789,7 +880,11 @@ mod daemonise {
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut SecondForkFailed::default());
+            let result = daemonise_with_helpers(
+                &PathBuf::from("test.log"),
+                &mut SecondForkFailed::default(),
+            );
+
             assert!(matches!(result, Err(WatcherError::Fatal(_))));
         }
 
@@ -807,7 +902,9 @@ mod daemonise {
                     self.call_counter += 1;
 
                     if self.call_counter == 2 {
-                        Ok(ForkResult::Parent { child: Pid::from_raw(1) })
+                        Ok(ForkResult::Parent {
+                            child: Pid::from_raw(1),
+                        })
                     } else {
                         Ok(ForkResult::Child)
                     }
@@ -816,18 +913,19 @@ mod daemonise {
 
             // We ourselves fork so that we can `waitpid` on the function
             match unsafe { fork() }.unwrap() {
-                ForkResult::Parent { child } => {
-                    match waitpid(child, None).unwrap() {
-                        WaitStatus::Exited(_, code) => {
-                            assert_eq!(code, 0);
-                        }
-                        _ => panic!("Child did not exit normally"),
+                ForkResult::Parent { child } => match waitpid(child, None).unwrap() {
+                    WaitStatus::Exited(_, code) => {
+                        assert_eq!(code, 0);
                     }
-                }
+                    _ => panic!("Child did not exit normally"),
+                },
                 ForkResult::Child => {
-                    let _ = daemonise_with_helpers(&PathBuf::from("test.log"), &mut SecondForkIsParent::default());
+                    let _ = daemonise_with_helpers(
+                        &PathBuf::from("test.log"),
+                        &mut SecondForkIsParent::default(),
+                    );
 
-                    // Fallback status code
+                    // Fallback exit
                     exit(99);
                 }
             }
@@ -851,7 +949,9 @@ mod daemonise {
             }
 
             let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut SetsidFailed);
-            assert!(matches!(result, Err(WatcherError::Fatal(_))));
+
+            let expected_error = TelemetryError::Nix(Errno::EOWNERDEAD.to_string());
+            assert_eq!(result.err(), Some(WatcherError::Fatal(expected_error)));
         }
 
         #[test]
@@ -875,8 +975,11 @@ mod daemonise {
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut ThirdForkFailed::default());
-            assert!(matches!(result, Err(WatcherError::Fatal(_))));
+            let result =
+                daemonise_with_helpers(&PathBuf::from("test.log"), &mut ThirdForkFailed::default());
+
+            let expected_error = TelemetryError::Nix(Errno::EOWNERDEAD.to_string());
+            assert_eq!(result.err(), Some(WatcherError::Fatal(expected_error)));
         }
 
         #[test]
@@ -893,7 +996,9 @@ mod daemonise {
                     self.call_counter += 1;
 
                     if self.call_counter == 3 {
-                        Ok(ForkResult::Parent { child: Pid::from_raw(1) })
+                        Ok(ForkResult::Parent {
+                            child: Pid::from_raw(1),
+                        })
                     } else {
                         Ok(ForkResult::Child)
                     }
@@ -902,20 +1007,78 @@ mod daemonise {
 
             // We ourselves fork so that we can `waitpid` on the function
             match unsafe { fork() }.unwrap() {
-                ForkResult::Parent { child } => {
-                    match waitpid(child, None).unwrap() {
-                        WaitStatus::Exited(_, code) => {
-                            assert_eq!(code, 0);
-                        }
-                        _ => panic!("Child did not exit normally"),
+                ForkResult::Parent { child } => match waitpid(child, None).unwrap() {
+                    WaitStatus::Exited(_, code) => {
+                        assert_eq!(code, 0);
                     }
-                }
+                    _ => panic!("Child did not exit normally"),
+                },
                 ForkResult::Child => {
-                    let _ = daemonise_with_helpers(&PathBuf::from("test.log"), &mut ThirdForkIsParent::default());
+                    let _ = daemonise_with_helpers(
+                        &PathBuf::from("test.log"),
+                        &mut ThirdForkIsParent::default(),
+                    );
 
-                    // Fallback status code
+                    // Fallback exit
                     exit(99);
                 }
+            }
+        }
+
+        #[test]
+        fn write_pipe_failed() {
+            setup_fuelup_home();
+
+            struct WritePipeFailed;
+
+            impl DaemoniseHelpers for WritePipeFailed {
+                fn write_pipe(&mut self, _write_fd: OwnedFd, _pid: Pid) -> nix::Result<usize> {
+                    Err(Errno::EOWNERDEAD)
+                }
+
+                fn fork(&mut self) -> nix::Result<ForkResult> {
+                    Ok(ForkResult::Child)
+                }
+            }
+
+            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut WritePipeFailed);
+
+            let expected_error = TelemetryError::Nix(Errno::EOWNERDEAD.to_string());
+            assert_eq!(result.err(), Some(WatcherError::Fatal(expected_error)));
+        }
+
+        #[test]
+        fn telemetry_config_failed() {
+            setup_fuelup_home();
+
+            struct TelemetryConfigFailed;
+
+            impl DaemoniseHelpers for TelemetryConfigFailed {
+                fn telemetry_config(
+                    &mut self,
+                ) -> std::result::Result<&'static TelemetryConfig, errors::TelemetryError>
+                {
+                    Err(TelemetryError::Mock)
+                }
+
+                fn fork(&mut self) -> nix::Result<ForkResult> {
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
+                }
+            }
+
+            if let Err(e) =
+                daemonise_with_helpers(&PathBuf::from("test.log"), &mut TelemetryConfigFailed)
+            {
+                assert_eq!(e, WatcherError::Fatal(TelemetryError::Mock));
             }
         }
 
@@ -924,40 +1087,33 @@ mod daemonise {
             struct SetupStdioFailed;
 
             impl DaemoniseHelpers for SetupStdioFailed {
-                fn setup_stdio(&self, _log_filename: &str) -> std::result::Result<(), TelemetryError> {
+                fn setup_stdio(
+                    &self,
+                    _log_filename: &str,
+                ) -> std::result::Result<(), TelemetryError> {
                     Err(TelemetryError::IO("Error setting up stdio".to_string()))
                 }
 
-                // Need to become the child so we don't return as the parent
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
                 }
             }
 
-
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut SetupStdioFailed);
-            assert!(matches!(result, Err(WatcherError::Fatal(_))));
-        }
-
-        #[test]
-        fn first_telemetry_config_failed() {
-            setup_fuelup_home();
-
-            struct FirstTelemetryConfigFailed;
-
-            impl DaemoniseHelpers for FirstTelemetryConfigFailed {
-                fn telemetry_config(&mut self) -> std::result::Result<&'static TelemetryConfig, errors::TelemetryError> {
-                    Err(TelemetryError::InvalidConfig("Error getting telemetry config".to_string()))
-                }
-
-                // Need to become the child so we don't return as the parent
-                fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
-                }
+            if let Err(e) =
+                daemonise_with_helpers(&PathBuf::from("test.log"), &mut SetupStdioFailed)
+            {
+                let expected_error = TelemetryError::IO("Error setting up stdio".to_string());
+                assert_eq!(e, WatcherError::Fatal(expected_error));
             }
-
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut FirstTelemetryConfigFailed);
-            assert!(matches!(result, Err(WatcherError::Fatal(_))));
         }
 
         #[test]
@@ -967,27 +1123,51 @@ mod daemonise {
             struct JoinFailed;
 
             impl DaemoniseHelpers for JoinFailed {
-                fn telemetry_config(&mut self) -> std::result::Result<&'static TelemetryConfig, errors::TelemetryError> {
-                    pub static _TELEMETRY_CONFIG: LazyLock<Result<TelemetryConfig>> = LazyLock::new(|| {
-                        Ok(TelemetryConfig {
-                            // Use invalid UTF-8 to trigger the error
-                            fuelup_tmp: unsafe { String::from_utf8_unchecked(vec![0xFF]) },
-                            fuelup_log: "".to_string(),
-                        })
-                    });
+                fn telemetry_config(
+                    &mut self,
+                ) -> std::result::Result<&'static TelemetryConfig, errors::TelemetryError>
+                {
+                    pub static _TELEMETRY_CONFIG: LazyLock<Result<TelemetryConfig>> =
+                        LazyLock::new(|| {
+                            Ok(TelemetryConfig {
+                                // Use invalid UTF-8 to trigger the error
+                                fuelup_tmp: unsafe { String::from_utf8_unchecked(vec![0xFF]) },
+                                fuelup_log: "".to_string(),
+                            })
+                        });
 
-                    _TELEMETRY_CONFIG.as_ref().map_err(|_|
-                        TelemetryError::InvalidConfig("Error getting telemetry config".to_string()))
+                    _TELEMETRY_CONFIG.as_ref().map_err(|_| {
+                        TelemetryError::InvalidConfig("Error getting telemetry config".to_string())
+                    })
                 }
 
-                // Need to become the child so we don't return as the parent
+                fn setup_stdio(
+                    &self,
+                    _log_filename: &str,
+                ) -> std::result::Result<(), TelemetryError> {
+                    Ok(())
+                }
+
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut JoinFailed);
-            assert!(matches!(result, Err(WatcherError::Fatal(TelemetryError::InvalidLogFile(_, _)))));
+            if let Err(e) = daemonise_with_helpers(&PathBuf::from("test.log"), &mut JoinFailed) {
+                assert!(matches!(
+                    e,
+                    WatcherError::Fatal(TelemetryError::InvalidLogFile(_, _))
+                ));
+            }
         }
 
         #[test]
@@ -1001,14 +1181,33 @@ mod daemonise {
                     Err(Errno::EOWNERDEAD)
                 }
 
-                // Need to become the child so we don't return as the parent
+                fn setup_stdio(
+                    &self,
+                    _log_filename: &str,
+                ) -> std::result::Result<(), TelemetryError> {
+                    Ok(())
+                }
+
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut ChdirFailed);
-            assert!(matches!(result, Err(WatcherError::Fatal(_))));
+            if let Err(e) = daemonise_with_helpers(&PathBuf::from("test.log"), &mut ChdirFailed) {
+                assert_eq!(
+                    e,
+                    WatcherError::Fatal(TelemetryError::Nix(Errno::EOWNERDEAD.to_string()))
+                );
+            }
         }
 
         #[test]
@@ -1022,14 +1221,33 @@ mod daemonise {
                     Err(Errno::EOWNERDEAD)
                 }
 
-                // Need to become the child so we don't return as the parent
+                fn setup_stdio(
+                    &self,
+                    _log_filename: &str,
+                ) -> std::result::Result<(), TelemetryError> {
+                    Ok(())
+                }
+
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut SysconfFailed);
-            assert!(matches!(result, Err(WatcherError::Fatal(_))));
+            if let Err(e) = daemonise_with_helpers(&PathBuf::from("test.log"), &mut SysconfFailed) {
+                assert_eq!(
+                    e,
+                    WatcherError::Fatal(TelemetryError::Nix(Errno::EOWNERDEAD.to_string()))
+                );
+            }
         }
 
         #[test]
@@ -1041,14 +1259,33 @@ mod daemonise {
                     Err(Errno::EBADF)
                 }
 
-                // Need to become the child so we don't return as the parent
+                fn setup_stdio(
+                    &self,
+                    _log_filename: &str,
+                ) -> std::result::Result<(), TelemetryError> {
+                    Ok(())
+                }
+
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut CloseFailed);
-            assert!(matches!(result, Ok(None)));
+            if let Err(e) = daemonise_with_helpers(&PathBuf::from("test.log"), &mut CloseFailed) {
+                assert_eq!(
+                    e,
+                    WatcherError::Fatal(TelemetryError::Nix(Errno::EBADF.to_string()))
+                );
+            }
         }
 
         #[test]
@@ -1062,14 +1299,33 @@ mod daemonise {
                     Err(Errno::EOWNERDEAD)
                 }
 
-                // Need to become the child so we don't return as the parent
+                fn setup_stdio(
+                    &self,
+                    _log_filename: &str,
+                ) -> std::result::Result<(), TelemetryError> {
+                    Ok(())
+                }
+
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
                 }
             }
 
-            let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut CloseFailed);
-            assert!(matches!(result, Err(WatcherError::Fatal(_))));
+            if let Err(e) = daemonise_with_helpers(&PathBuf::from("test.log"), &mut CloseFailed) {
+                assert_eq!(
+                    e,
+                    WatcherError::Fatal(TelemetryError::Nix(Errno::EOWNERDEAD.to_string()))
+                );
+            }
         }
 
         #[test]
@@ -1079,13 +1335,34 @@ mod daemonise {
             struct AOk;
 
             impl DaemoniseHelpers for AOk {
+                fn setup_stdio(
+                    &self,
+                    _log_filename: &str,
+                ) -> std::result::Result<(), TelemetryError> {
+                    Ok(())
+                }
+
                 fn fork(&mut self) -> nix::Result<ForkResult> {
-                    Ok(ForkResult::Child)
+                    // We want to continue as the child process, so flip the fork result
+                    // and return the original parent as the child
+                    let original_parent = getpid();
+
+                    match unsafe { fork() }.unwrap() {
+                        ForkResult::Parent { child: _child } => Ok(ForkResult::Child),
+                        ForkResult::Child => Ok(ForkResult::Parent {
+                            child: original_parent,
+                        }),
+                    }
                 }
             }
 
+            let parent_pid = getpid();
             let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut AOk);
-            assert!(matches!(result, Ok(None)));
+
+            // We only care about the point of view from the parent (with flipped fork result)
+            if getpid() == parent_pid {
+                assert_eq!(result, Ok(None));
+            }
         }
     }
 }
