@@ -262,7 +262,7 @@ impl FileWatcher {
 
             for base64_line in lines {
                 // First, decode the Base64 line
-                let decoded_line = helpers.base64_decode(base64_line)?;
+                let decoded_line = helpers.base64_decode(&base64_line)?;
                 let line = helpers.string_from_utf8(decoded_line)?;
 
                 let (event, spans_long, spans_short, fields) = helpers.parse_event(&line)?;
@@ -358,7 +358,7 @@ trait PollDirectoryHelpers {
             .collect::<std::result::Result<Vec<_>, _>>()
     }
 
-    fn base64_decode(&self, line: String) -> std::result::Result<Vec<u8>, DecodeError> {
+    fn base64_decode(&self, line: &str) -> std::result::Result<Vec<u8>, DecodeError> {
         STANDARD.decode(line.as_bytes())
     }
 
@@ -484,20 +484,8 @@ trait PollDirectoryHelpers {
     }
 }
 
-// fn event_regex<'a>(&self, line: &'a str) -> Result<Captures<'a>> {
-//     TELEMETRY_EVENT_REGEX.as_ref()?.captures(line)
-//         .ok_or_else(|| TelemetryError::InvalidTracingEvent(line.to_string()))
-// }
-// fn match_name<'a>(&self, captures: &'a Captures, name: &str) -> Option<Match<'a>> {
-//     captures.name(name)
-// }
-
 struct DefaultPollDirectoryHelpers;
 impl PollDirectoryHelpers for DefaultPollDirectoryHelpers {}
-
-//
-// Helper functions that might be moved later to lib.rs
-//
 
 /// Find telemetry files
 ///
@@ -1135,7 +1123,7 @@ mod poll_directory {
                     Ok(vec![setup_test_file()])
                 }
 
-                fn base64_decode(&self, _line: String) -> std::result::Result<Vec<u8>, DecodeError> {
+                fn base64_decode(&self, _line: &str) -> std::result::Result<Vec<u8>, DecodeError> {
                     Err(DecodeError::InvalidLength(111222333444555))
                 }
             }
