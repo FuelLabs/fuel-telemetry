@@ -532,7 +532,9 @@ pub(crate) fn setup_stdio_with_helpers<S: SetupStdioHelpers>(
 
 #[cfg(test)]
 fn setup_fuelup_home() {
-    std::env::set_var("FUELUP_HOME", std::env::temp_dir().to_str().unwrap());
+    let tmp_dir = std::env::temp_dir().join(format!("fuelup-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&tmp_dir).unwrap();
+    std::env::set_var("FUELUP_HOME", tmp_dir.to_str().unwrap());
 }
 
 #[cfg(test)]
