@@ -613,6 +613,16 @@ mod config {
             set_var("INFLUXDB_BUCKET", "bucket-name");
 
             let config = config().unwrap();
+
+            assert_eq!(
+                config.lockfile,
+                Path::new(&format!("{}/tmp/telemetry-file-watcher.lock", &fuelup_home))
+            );
+
+            assert_eq!(
+                config.logfile,
+                Path::new(&format!("{}/log/telemetry-file-watcher.log", &fuelup_home))
+            );
             assert_eq!(config.poll_interval, Duration::from_secs(2222));
             assert_eq!(config.influxdb_token, "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag==");
             assert_eq!(
@@ -724,10 +734,10 @@ mod start {
             let mut file_watcher = FileWatcher::new().unwrap();
             let result = file_watcher.start_with_helpers(&DaemoniseFailed);
 
-            assert!(matches!(
-                result,
-                Err(WatcherError::Fatal(TelemetryError::Mock))
-            ));
+            assert_eq!(
+                result.err(),
+                Some(WatcherError::Fatal(TelemetryError::Mock))
+            );
             assert!(!STARTED.load(Ordering::Relaxed));
             assert_eq!(PID.load(Ordering::Relaxed), 0);
         }
@@ -745,7 +755,7 @@ mod start {
             let mut file_watcher = FileWatcher::new().unwrap();
             let result = file_watcher.start_with_helpers(&DaemoniseIsParent);
 
-            assert!(matches!(result, Ok(())));
+            assert_eq!(result, Ok(()));
             assert!(STARTED.load(Ordering::Relaxed));
             assert_eq!(PID.load(Ordering::Relaxed), 1337);
         }
