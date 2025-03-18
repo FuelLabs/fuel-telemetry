@@ -48,14 +48,8 @@ fn config() -> Result<&'static SystemInfoWatcherConfig> {
 
             Ok(SystemInfoWatcherConfig {
                 // 60*60*24*30 = 2592000 (30 days)
-                interval: get_env("SYSTEMINFO_WATCHER_INTERVAL", "2592000")
-                    .parse()
-                    .map_err(|e| {
-                        TelemetryError::InvalidConfig(format!("Interval is invalid: {}", e))
-                    })?,
-                metadata_timeout: get_env("METADATA_TIMEOUT", "3").parse().map_err(|e| {
-                    TelemetryError::InvalidConfig(format!("Metadata timeout is invalid: {}", e))
-                })?,
+                interval: get_env("SYSTEMINFO_WATCHER_INTERVAL", "2592000").parse()?,
+                metadata_timeout: get_env("METADATA_TIMEOUT", "3").parse()?,
                 lockfile: Path::new(&telemetry_config()?.fuelup_tmp)
                     .join("telemetry-systeminfo-watcher.lock"),
                 logfile: Path::new(&telemetry_config()?.fuelup_log)
