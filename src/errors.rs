@@ -13,6 +13,8 @@ pub enum TelemetryError {
     IO(String),
     #[error("Nix error: {0}")]
     Nix(String),
+    #[error("Parse error: {0}")]
+    Parse(String),
     #[error("Reqwest error: {0}")]
     Reqwest(String),
     #[error("Request clone failed")]
@@ -97,6 +99,12 @@ impl From<io::Error> for TelemetryError {
 impl From<nix::Error> for TelemetryError {
     fn from(err: nix::Error) -> Self {
         Self::Nix(err.to_string())
+    }
+}
+
+impl From<std::num::ParseIntError> for TelemetryError {
+    fn from(err: std::num::ParseIntError) -> Self {
+        Self::Parse(err.to_string())
     }
 }
 

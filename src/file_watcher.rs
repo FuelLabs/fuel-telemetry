@@ -57,11 +57,7 @@ fn config() -> Result<&'static FileWatcherConfig> {
         let get_env = |key, default| EnvSetting::new(key, default).get();
 
         // Since we use an hourly appender, we default to polling every hour
-        let poll_interval = get_env("FILEWATCHER_POLL_INTERVAL", "3600")
-            .parse()
-            .map_err(|e| {
-                TelemetryError::InvalidConfig(format!("Poll interval is invalid: {}", e))
-            })?;
+        let poll_interval = get_env("FILEWATCHER_POLL_INTERVAL", "3600").parse()?;
 
         // Format the InfluxDB URL (the org name needs to be URL-encoded)
         let influxdb_url = format!(
@@ -570,6 +566,19 @@ mod config {
 
             let config = config().unwrap();
             assert_eq!(config.poll_interval, Duration::from_secs(2222));
+        }
+
+        #[test]
+        fn poll_interval_invalid() {
+            set_var("FILEWATCHER_POLL_INTERVAL", "invalid");
+
+            let config = config();
+            assert_eq!(
+                config.err(),
+                Some(TelemetryError::InvalidConfig(
+                    TelemetryError::Parse("invalid digit found in string".to_string()).into()
+                ))
+            );
         }
 
         #[test]
