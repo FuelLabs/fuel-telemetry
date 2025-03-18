@@ -71,6 +71,12 @@ impl From<&TelemetryError> for TelemetryError {
     }
 }
 
+impl From<TelemetryError> for String {
+    fn from(err: TelemetryError) -> Self {
+        err.to_string()
+    }
+}
+
 impl std::fmt::Debug for TelemetryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
@@ -83,12 +89,6 @@ impl std::fmt::Debug for TelemetryError {
 // and can't use `?` directly because the source errors don't implement
 // `Clone`.
 //
-
-impl From<FromUtf8Error> for TelemetryError {
-    fn from(err: FromUtf8Error) -> Self {
-        Self::Utf8(err.to_string())
-    }
-}
 
 impl From<io::Error> for TelemetryError {
     fn from(err: io::Error) -> Self {
@@ -111,6 +111,12 @@ impl From<std::num::ParseIntError> for TelemetryError {
 impl From<reqwest::Error> for TelemetryError {
     fn from(err: reqwest::Error) -> Self {
         Self::Reqwest(err.to_string())
+    }
+}
+
+impl From<FromUtf8Error> for TelemetryError {
+    fn from(err: FromUtf8Error) -> Self {
+        Self::Utf8(err.to_string())
     }
 }
 

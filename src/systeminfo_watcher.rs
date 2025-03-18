@@ -1,6 +1,7 @@
 use crate::{
     self as fuel_telemetry, daemonise, enforce_singleton, info, into_recoverable, span,
-    telemetry_config, EnvSetting, Level, Result, TelemetryError, WatcherResult,
+    telemetry_config, telemetry_formatter, EnvSetting, Level, Result, TelemetryError,
+    WatcherResult,
 };
 
 use nix::{
@@ -14,8 +15,8 @@ use nix::{
 };
 use std::{
     env::{set_var, var},
-    fs::OpenOptions,
-    os::fd::AsRawFd,
+    fs::{File, OpenOptions},
+    os::fd::{AsRawFd, RawFd},
     path::{Path, PathBuf},
     process::exit,
     sync::{
@@ -68,6 +69,9 @@ fn config() -> Result<&'static SystemInfoWatcherConfig> {
 // with the other watchers
 pub struct SystemInfoWatcher;
 
+// Prevent recursive calls to start()
+static STARTED: AtomicBool = AtomicBool::new(false);
+
 /// The PID of the currently running `SystemInfoWatcher` daemon
 pub static PID: AtomicI32 = AtomicI32::new(0);
 
@@ -77,15 +81,16 @@ impl SystemInfoWatcher {
     }
 
     pub fn start(&mut self) -> WatcherResult<()> {
+        self.start_with_helpers(&DefaultStartHelpers)
+    }
+
+    fn start_with_helpers(&mut self, helpers: &impl StartHelpers) -> WatcherResult<()> {
         if var("FUELUP_NO_TELEMETRY").is_ok() {
             // If telemetry is disabled, immediately return
             return Ok(());
         }
 
         let logfile = &config().map_err(into_recoverable)?.logfile;
-
-        // Prevent recursive calls to start()
-        static STARTED: AtomicBool = AtomicBool::new(false);
 
         if STARTED.load(Ordering::Relaxed) {
             return Ok(());
@@ -95,7 +100,7 @@ impl SystemInfoWatcher {
 
         // Even though we won't be hanging around long, we still daemonise
         // so that we don't get in the way of the calling process
-        match daemonise(logfile) {
+        match helpers.daemonise(logfile) {
             Ok(Some(pid)) => {
                 // We are the parent, so record the PID then immediately return
                 PID.store(pid.as_raw(), Ordering::Relaxed);
@@ -128,17 +133,17 @@ impl SystemInfoWatcher {
         // Also, we need to set the bucket name as the SystemInfoWatcher is
         // system-wide rather than being crate/process specific
         set_var("TELEMETRY_PKG_NAME", "systeminfo_watcher");
-        let (telemetry_layer, _guard) = fuel_telemetry::new!()?;
+        let (telemetry_layer, _guard) = helpers.new_fuel_telemetry()?;
         tracing_subscriber::registry().with(telemetry_layer).init();
 
         // Enforce a singleton to ensure we are the only process submitting
         // telemetry to InfluxDB
-        let _lock = enforce_singleton(&config()?.lockfile)?;
+        let _lock = helpers.enforce_singleton(&config()?.lockfile)?;
 
         // Check if it's time to collect metrics
-        self.poll_systeminfo()?;
+        helpers.poll_systeminfo(self)?;
 
-        exit(0);
+        helpers.exit(0)
     }
 
     /// Kill the `SystemInfoWatcher` daemon if one is running
@@ -155,32 +160,21 @@ impl SystemInfoWatcher {
     }
 
     fn poll_systeminfo(&self) -> Result<()> {
+        self.poll_systeminfo_with_helpers(&mut DefaultPollSysteminfoHelpers)
+    }
+
+    fn poll_systeminfo_with_helpers(&self, helpers: &mut impl PollSysteminfoHelpers) -> Result<()> {
         // If the lockfile is not found, create it and continue. Otherwise,
         // check its modification time and return if it's too recent
         let touchfile_lock = if !config()?.touchfile.exists() {
-            Flock::lock(
-                OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&config()?.touchfile)?,
-                FlockArg::LockExclusiveNonblock,
-            )
-            .map_err(|(_, e)| e)?
+            helpers.create_and_lock_touchfile(&config()?.touchfile)?
         } else {
-            let locked_file = Flock::lock(
-                OpenOptions::new()
-                    .create(false)
-                    .append(true)
-                    .open(&config()?.touchfile)?,
-                FlockArg::LockExclusiveNonblock,
-            )
-            .map_err(|(_, e)| e)?;
+            let locked_file = helpers.open_and_lock_touchfile(&config()?.touchfile)?;
+            let now = helpers.now()?;
 
-            let now = ClockId::CLOCK_REALTIME
-                .now()
-                .map_err(|e| TelemetryError::Nix(e.to_string()))?;
-
-            if now.tv_sec() < fstat(locked_file.as_raw_fd())?.st_mtime + config()?.interval as i64 {
+            if now.tv_sec()
+                < helpers.fstat(locked_file.as_raw_fd())?.st_mtime + config()?.interval as i64
+            {
                 // We must have collected metrics recently, so return
                 return Ok(());
             }
@@ -225,7 +219,7 @@ impl SystemInfoWatcher {
 
         // Detect if we're not running on bare metal
         let ci = detect_ci();
-        let vm = detect_vm()?;
+        let vm = helpers.detect_vm()?;
 
         let span = span!(Level::INFO, "poll_systeminfo", telemetry = true);
         let _guard = span.enter();
@@ -249,12 +243,99 @@ impl SystemInfoWatcher {
         );
 
         // Update the touchfile's modification time by truncating it
-        touchfile_lock.set_len(0)?;
-        touchfile_lock.sync_all()?;
+        helpers.set_len(&touchfile_lock, 0)?;
+        helpers.sync_all(&touchfile_lock)?;
 
         Ok(())
     }
 }
+
+trait StartHelpers {
+    fn daemonise(&self, logfile: &PathBuf) -> WatcherResult<Option<Pid>> {
+        daemonise(logfile)
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn new_fuel_telemetry(
+        &self,
+    ) -> Result<(
+        tracing_subscriber::filter::Filtered<
+            tracing_subscriber::fmt::Layer<
+                tracing_subscriber::Registry,
+                tracing_subscriber::fmt::format::DefaultFields,
+                telemetry_formatter::TelemetryFormatter,
+                tracing_appender::non_blocking::NonBlocking,
+            >,
+            tracing_subscriber::EnvFilter,
+            tracing_subscriber::Registry,
+        >,
+        tracing_appender::non_blocking::WorkerGuard,
+    )> {
+        fuel_telemetry::new!()
+    }
+
+    fn enforce_singleton(&self, lockfile_path: &Path) -> Result<Flock<File>> {
+        enforce_singleton(lockfile_path)
+    }
+
+    fn poll_systeminfo(&self, systeminfo_watcher: &SystemInfoWatcher) -> Result<()> {
+        systeminfo_watcher.poll_systeminfo()
+    }
+
+    fn exit(&self, code: i32) -> ! {
+        exit(code)
+    }
+}
+
+struct DefaultStartHelpers;
+impl StartHelpers for DefaultStartHelpers {}
+
+trait PollSysteminfoHelpers {
+    fn create_and_lock_touchfile(&self, touchfile: &Path) -> Result<Flock<File>> {
+        Ok(Flock::lock(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(touchfile)?,
+            FlockArg::LockExclusiveNonblock,
+        )
+        .map_err(|(_, e)| e)?)
+    }
+
+    fn open_and_lock_touchfile(&self, touchfile: &Path) -> Result<Flock<File>> {
+        Ok(Flock::lock(
+            OpenOptions::new()
+                .create(false)
+                .append(true)
+                .open(touchfile)?,
+            FlockArg::LockExclusiveNonblock,
+        )
+        .map_err(|(_, e)| e)?)
+    }
+
+    fn now(&self) -> nix::Result<nix::sys::time::TimeSpec> {
+        ClockId::CLOCK_REALTIME.now()
+    }
+
+    fn fstat(&self, fd: RawFd) -> nix::Result<libc::stat> {
+        fstat(fd)
+    }
+
+    fn detect_vm(&self) -> Result<&'static str> {
+        detect_vm()
+    }
+
+    fn set_len(&self, flock: &Flock<File>, len: u64) -> std::io::Result<()> {
+        flock.set_len(len)
+    }
+
+    fn sync_all(&self, flock: &Flock<File>) -> std::io::Result<()> {
+        flock.sync_all()
+    }
+}
+
+struct DefaultPollSysteminfoHelpers;
+impl PollSysteminfoHelpers for DefaultPollSysteminfoHelpers {}
 
 fn detect_ci() -> &'static str {
     // Check if we are running in any type of CI
@@ -351,4 +432,699 @@ fn detect_vm() -> Result<&'static str> {
     }
 
     Ok("")
+}
+
+#[cfg(test)]
+mod config {
+    use super::*;
+    use crate::setup_fuelup_home;
+    use dirs::home_dir;
+    use rusty_fork::rusty_fork_test;
+    use std::env::var;
+    use std::path::Path;
+
+    rusty_fork_test! {
+        #[test]
+        fn all_unset() {
+            let config = config().unwrap();
+
+            assert_eq!(config.interval, 2592000);
+            assert_eq!(config.metadata_timeout, 3);
+
+            assert_eq!(
+                config.lockfile,
+                Path::new(
+                    &home_dir()
+                        .unwrap()
+                        .join(".fuelup/tmp/telemetry-systeminfo-watcher.lock")
+                )
+            );
+
+            assert_eq!(
+                config.logfile,
+                Path::new(
+                    &home_dir()
+                        .unwrap()
+                        .join(".fuelup/log/telemetry-systeminfo-watcher.log")
+                )
+            );
+
+            assert_eq!(
+                config.touchfile,
+                Path::new(
+                    &home_dir()
+                        .unwrap()
+                        .join(".fuelup/tmp/telemetry-systeminfo-watcher.touch")
+                )
+            );
+        }
+
+        #[test]
+        fn systeminfo_watcher_interval_set() {
+            set_var("SYSTEMINFO_WATCHER_INTERVAL", "2222");
+
+            let config = config().unwrap();
+            assert_eq!(config.interval, 2222);
+        }
+
+        #[test]
+        fn systeminfo_watcher_interval_invalid() {
+            set_var("SYSTEMINFO_WATCHER_INTERVAL", "invalid interval");
+
+            assert_eq!(
+                config().err(),
+                Some(TelemetryError::InvalidConfig(
+                    TelemetryError::Parse("invalid digit found in string".to_string()).into()
+                ))
+            );
+        }
+
+        #[test]
+        fn metadata_timeout_set() {
+            set_var("METADATA_TIMEOUT", "2222");
+
+            let config = config().unwrap();
+            assert_eq!(config.metadata_timeout, 2222);
+        }
+
+        #[test]
+        fn metadata_timeout_invalid() {
+            set_var("METADATA_TIMEOUT", "invalid");
+
+            assert_eq!(
+                config().err(),
+                Some(TelemetryError::InvalidConfig(
+                    TelemetryError::Parse("invalid digit found in string".to_string()).into()
+                ))
+            );
+        }
+
+        #[test]
+        fn all_set() {
+            setup_fuelup_home();
+            let fuelup_home = var("FUELUP_HOME").unwrap();
+
+            set_var("SYSTEMINFO_WATCHER_INTERVAL", "2222");
+            set_var("METADATA_TIMEOUT", "3333");
+
+            let config = config().unwrap();
+
+            assert_eq!(config.interval, 2222);
+            assert_eq!(config.metadata_timeout, 3333);
+
+            assert_eq!(
+                config.lockfile,
+                Path::new(&format!(
+                    "{}/tmp/telemetry-systeminfo-watcher.lock",
+                    &fuelup_home
+                ))
+            );
+
+            assert_eq!(
+                config.logfile,
+                Path::new(&format!(
+                    "{}/log/telemetry-systeminfo-watcher.log",
+                    &fuelup_home
+                ))
+            );
+
+            assert_eq!(
+                config.touchfile,
+                Path::new(&format!(
+                    "{}/tmp/telemetry-systeminfo-watcher.touch",
+                    &fuelup_home
+                ))
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod new {
+    use super::*;
+
+    #[test]
+    fn new() {
+        assert!(SystemInfoWatcher::new().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod start {
+    use super::*;
+    use crate::{into_recoverable, setup_fuelup_home, WatcherError};
+    use nix::sys::signal::kill;
+    use rusty_fork::rusty_fork_test;
+    use std::{fs::File, thread::sleep, time::Duration};
+
+    rusty_fork_test! {
+        #[test]
+        fn opted_out_is_true() {
+            set_var("FUELUP_NO_TELEMETRY", "true");
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start();
+
+            // Make sure it didn't continue and init values
+            assert!(result.is_ok());
+            assert!(!STARTED.load(Ordering::Relaxed));
+            assert_eq!(PID.load(Ordering::Relaxed), 0);
+        }
+
+        #[test]
+        fn opted_out_is_empty() {
+            // Even though it's empty, we only care if it's set
+            set_var("FUELUP_NO_TELEMETRY", "");
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start();
+
+            // Make sure it didn't continue and init values
+            assert!(result.is_ok());
+            assert!(!STARTED.load(Ordering::Relaxed));
+            assert_eq!(PID.load(Ordering::Relaxed), 0);
+        }
+
+        #[test]
+        fn already_started() {
+            STARTED.store(true, Ordering::Relaxed);
+            PID.store(1, Ordering::Relaxed);
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start();
+
+            // Make sure it didn't continue and init values
+            assert!(result.is_ok());
+            assert!(STARTED.load(Ordering::Relaxed));
+            assert_eq!(PID.load(Ordering::Relaxed), 1);
+
+            // Try to start it again to test re-entrance
+            let result = systeminfo_watcher.start();
+
+            assert!(result.is_ok());
+            assert!(STARTED.load(Ordering::Relaxed));
+            assert_eq!(PID.load(Ordering::Relaxed), 1);
+        }
+
+        #[test]
+        fn daemonise_failed() {
+            struct DaemoniseFailed;
+
+            impl StartHelpers for DaemoniseFailed {
+                fn daemonise(&self, _logfile: &PathBuf) -> WatcherResult<Option<Pid>> {
+                    Err(into_recoverable(TelemetryError::Mock))
+                }
+            }
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start_with_helpers(&DaemoniseFailed);
+
+            assert_eq!(result, Err(WatcherError::Recoverable(TelemetryError::Mock)));
+            assert!(!STARTED.load(Ordering::Relaxed));
+            assert_eq!(PID.load(Ordering::Relaxed), 0);
+        }
+
+        #[test]
+        fn daemonise_is_parent() {
+            struct DaemoniseIsParent;
+
+            impl StartHelpers for DaemoniseIsParent {
+                fn daemonise(&self, _logfile: &PathBuf) -> WatcherResult<Option<Pid>> {
+                    Ok(Some(Pid::from_raw(2222)))
+                }
+            }
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start_with_helpers(&DaemoniseIsParent);
+
+            assert_eq!(result, Ok(()));
+            assert!(STARTED.load(Ordering::Relaxed));
+            assert_eq!(PID.load(Ordering::Relaxed), 2222);
+        }
+
+        #[test]
+        fn new_fuel_telemetry_failed() {
+            struct NewFuelTelemetryFailed;
+
+            impl StartHelpers for NewFuelTelemetryFailed {
+                fn new_fuel_telemetry(
+                    &self,
+                ) -> Result<(
+                    tracing_subscriber::filter::Filtered<
+                        tracing_subscriber::fmt::Layer<
+                            tracing_subscriber::Registry,
+                            tracing_subscriber::fmt::format::DefaultFields,
+                            telemetry_formatter::TelemetryFormatter,
+                            tracing_appender::non_blocking::NonBlocking,
+                        >,
+                        tracing_subscriber::EnvFilter,
+                        tracing_subscriber::Registry,
+                    >,
+                    tracing_appender::non_blocking::WorkerGuard,
+                )> {
+                    Err(TelemetryError::Mock)
+                }
+
+                fn daemonise(&self, _logfile: &PathBuf) -> WatcherResult<Option<Pid>> {
+                    Ok(None)
+                }
+            }
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start_with_helpers(&NewFuelTelemetryFailed);
+
+            assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
+        }
+
+        #[test]
+        fn enforce_singleton_failed() {
+            struct EnforceSingletonFailed;
+
+            impl StartHelpers for EnforceSingletonFailed {
+                fn enforce_singleton(&self, _lockfile_path: &Path) -> Result<Flock<File>> {
+                    Err(TelemetryError::Mock)
+                }
+
+                fn daemonise(&self, _logfile: &PathBuf) -> WatcherResult<Option<Pid>> {
+                    Ok(None)
+                }
+            }
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start_with_helpers(&EnforceSingletonFailed);
+
+            assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
+        }
+
+        #[test]
+        fn poll_systeminfo_failed() {
+            struct PollSysteminfoFailed;
+
+            impl StartHelpers for PollSysteminfoFailed {
+                fn poll_systeminfo(&self, _systeminfo_watcher: &SystemInfoWatcher) -> Result<()> {
+                    Err(TelemetryError::Mock)
+                }
+
+                fn daemonise(&self, _logfile: &PathBuf) -> WatcherResult<Option<Pid>> {
+                    Ok(None)
+                }
+            }
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start_with_helpers(&PollSysteminfoFailed);
+
+            assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
+        }
+
+        #[test]
+        fn ok() {
+            setup_fuelup_home();
+
+            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.start();
+            let pid = PID.load(Ordering::Relaxed);
+
+            assert_eq!(result, Ok(()));
+            assert!(STARTED.load(Ordering::Relaxed));
+            assert!(pid > 0);
+
+            // SysInfoWatcher takes a few seconds to complete, so wait long
+            // enough to be run within Github Actions
+            for _ in 0..30 {
+                if kill(Pid::from_raw(pid), None).is_ok() {
+                    sleep(Duration::from_secs(1))
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod kill {
+    use super::*;
+    use nix::{
+        sys::{
+            signal::Signal,
+            wait::{waitpid, WaitPidFlag, WaitStatus},
+        },
+        unistd::{fork, ForkResult},
+    };
+    use rusty_fork::rusty_fork_test;
+    use std::thread::sleep;
+
+    rusty_fork_test! {
+        #[test]
+        fn kill_nobody() {
+            crate::systeminfo_watcher::PID.store(0, Ordering::Relaxed);
+            assert!(!SystemInfoWatcher::kill().unwrap());
+        }
+
+        #[test]
+        fn kill_systeminfo_watcher() {
+            let mut kill_called = false;
+
+            match unsafe { fork() }.unwrap() {
+                ForkResult::Parent { child } => {
+                    loop {
+                        match waitpid(child, Some(WaitPidFlag::WNOHANG)) {
+                            Ok(WaitStatus::StillAlive) => {
+                                if !kill_called {
+                                    // Since we're not daemonising, we have to set the PID manually
+                                    crate::systeminfo_watcher::PID
+                                        .store(child.as_raw(), Ordering::Relaxed);
+                                    assert!(SystemInfoWatcher::kill().unwrap());
+
+                                    kill_called = true;
+                                    continue;
+                                }
+                            }
+                            Ok(WaitStatus::Signaled(child_pid, signal, _)) => {
+                                assert_eq!(child_pid, child);
+                                assert_eq!(signal, Signal::SIGKILL);
+                                break;
+                            }
+                            _ => panic!("Child process terminated unexpectedly"),
+                        }
+                    }
+                }
+                ForkResult::Child => loop {
+                    sleep(Duration::from_secs(10));
+                },
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod poll_systeminfo {
+    use super::*;
+    use crate::setup_fuelup_home;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use rusty_fork::rusty_fork_test;
+    use std::{
+        io::{BufRead, BufReader},
+        time::SystemTime,
+    };
+    use sysinfo::System;
+
+    rusty_fork_test! {
+        #[test]
+        fn create_locked_touchfile_failed() {
+            setup_fuelup_home();
+
+            struct CreateLockedTouchfileFailed;
+
+            impl PollSysteminfoHelpers for CreateLockedTouchfileFailed {
+                fn create_and_lock_touchfile(&self, _touchfile: &Path) -> Result<Flock<File>> {
+                    Err(TelemetryError::Mock)
+                }
+            }
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result =
+                systeminfo_watcher.poll_systeminfo_with_helpers(&mut CreateLockedTouchfileFailed);
+
+            assert_eq!(result, Err(TelemetryError::Mock));
+        }
+
+        #[test]
+        fn open_and_lock_touchfile_failed() {
+            setup_fuelup_home();
+
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            struct OpenAndLockTouchfileFailed;
+
+            impl PollSysteminfoHelpers for OpenAndLockTouchfileFailed {
+                fn open_and_lock_touchfile(&self, _touchfile: &Path) -> Result<Flock<File>> {
+                    Err(TelemetryError::Mock)
+                }
+            }
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result =
+                systeminfo_watcher.poll_systeminfo_with_helpers(&mut OpenAndLockTouchfileFailed);
+
+            assert_eq!(result, Err(TelemetryError::Mock));
+        }
+
+        #[test]
+        fn now_failed() {
+            setup_fuelup_home();
+
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            struct NowFailed;
+
+            impl PollSysteminfoHelpers for NowFailed {
+                fn now(&self) -> nix::Result<nix::sys::time::TimeSpec> {
+                    Err(nix::errno::Errno::EOWNERDEAD)
+                }
+            }
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut NowFailed);
+
+            assert_eq!(
+                result,
+                Err(TelemetryError::Nix(
+                    nix::errno::Errno::EOWNERDEAD.to_string()
+                ))
+            );
+        }
+
+        #[test]
+        fn fstat_failed() {
+            setup_fuelup_home();
+
+            struct FstatFailed;
+
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            impl PollSysteminfoHelpers for FstatFailed {
+                fn fstat(&self, _fd: RawFd) -> nix::Result<libc::stat> {
+                    Err(nix::errno::Errno::EOWNERDEAD)
+                }
+            }
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut FstatFailed);
+
+            assert_eq!(
+                result,
+                Err(TelemetryError::Nix(
+                    nix::errno::Errno::EOWNERDEAD.to_string()
+                ))
+            );
+        }
+
+        #[test]
+        fn recently_polled() {
+            setup_fuelup_home();
+
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.poll_systeminfo();
+
+            assert_eq!(result, Ok(()));
+        }
+
+        #[test]
+        fn detect_vm_failed() {
+            setup_fuelup_home();
+
+            let touchfile = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            touchfile
+                .set_modified(
+                    SystemTime::now() - Duration::from_secs(config().unwrap().interval as u64),
+                )
+                .unwrap();
+
+            struct DetectVmFailed;
+
+            impl PollSysteminfoHelpers for DetectVmFailed {
+                fn detect_vm(&self) -> Result<&'static str> {
+                    Err(TelemetryError::Mock)
+                }
+            }
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut DetectVmFailed);
+
+            assert_eq!(result, Err(TelemetryError::Mock));
+        }
+
+        #[test]
+        fn set_len_failed() {
+            setup_fuelup_home();
+
+            let touchfile = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            touchfile
+                .set_modified(
+                    SystemTime::now() - Duration::from_secs(config().unwrap().interval as u64),
+                )
+                .unwrap();
+
+            struct SetLenFailed;
+
+            impl PollSysteminfoHelpers for SetLenFailed {
+                fn set_len(&self, _flock: &Flock<File>, _len: u64) -> std::io::Result<()> {
+                    Err(std::io::Error::new(std::io::ErrorKind::Other, "Mock error"))
+                }
+            }
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut SetLenFailed);
+
+            assert_eq!(result, Err(TelemetryError::IO("Mock error".to_string())));
+        }
+
+        #[test]
+        fn sync_all_failed() {
+            setup_fuelup_home();
+
+            let touchfile = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            touchfile
+                .set_modified(
+                    SystemTime::now() - Duration::from_secs(config().unwrap().interval as u64),
+                )
+                .unwrap();
+
+            struct SyncAllFailed;
+
+            impl PollSysteminfoHelpers for SyncAllFailed {
+                fn sync_all(&self, _flock: &Flock<File>) -> std::io::Result<()> {
+                    Err(std::io::Error::new(std::io::ErrorKind::Other, "Mock error"))
+                }
+            }
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut SyncAllFailed);
+
+            assert_eq!(result, Err(TelemetryError::IO("Mock error".to_string())));
+        }
+
+        #[test]
+        fn ok() {
+            setup_fuelup_home();
+
+            let touchfile = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(Path::new(&config().unwrap().touchfile))
+                .unwrap();
+
+            let old_modified =
+                SystemTime::now() - Duration::from_secs(config().unwrap().interval * 2);
+
+            touchfile.set_modified(old_modified).unwrap();
+
+            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+
+            // Create a telemetry layer so we the telemetry file is written to
+            set_var("TELEMETRY_PKG_NAME", "systeminfo_watcher");
+            let (telemetry_layer, _guard) = crate::new!().unwrap();
+            tracing_subscriber::registry().with(telemetry_layer).init();
+
+            let result = systeminfo_watcher.poll_systeminfo();
+            drop(_guard);
+
+            assert_eq!(result, Ok(()));
+            assert!(old_modified < touchfile.metadata().unwrap().modified().unwrap());
+
+            // Test some fields were written to the telemetry file
+
+            let telemetry_file =
+                std::fs::read_dir(Path::new(&telemetry_config().unwrap().fuelup_tmp))
+                    .unwrap()
+                    .find(|file| {
+                        file.as_ref()
+                            .unwrap()
+                            .path()
+                            .to_str()
+                            .unwrap()
+                            .contains("systeminfo_watcher.telemetry.")
+                    });
+
+            assert!(telemetry_file.is_some());
+
+            let body = {
+                let mut body = Vec::new();
+
+                let lines =
+                    BufReader::new(File::open(telemetry_file.unwrap().unwrap().path()).unwrap())
+                        .lines()
+                        .collect::<std::result::Result<Vec<_>, _>>()
+                        .unwrap();
+
+                for base64_line in lines {
+                    let decoded_line = STANDARD.decode(&base64_line).unwrap();
+                    let line = String::from_utf8(decoded_line).unwrap();
+
+                    body.push(line);
+                }
+
+                body.join("\n")
+            };
+
+            let mut sysinfo = System::new();
+
+            sysinfo.refresh_cpu_usage();
+            std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+            sysinfo.refresh_cpu_usage();
+
+            let cpus = sysinfo.cpus();
+            let cpu_brand = cpus
+                .first()
+                .map_or_else(String::default, |cpu| cpu.brand().into());
+
+            assert!(body.contains(&format!("cpu_arch=\"{}\"", System::cpu_arch())));
+            assert!(body.contains(&format!("cpu_count={}", cpus.len())));
+            assert!(body.contains(&format!("cpu_brand=\"{}\"", cpu_brand)));
+
+            assert!(body.contains(&format!(
+                "os_long_name=\"{}\"",
+                System::long_os_version().unwrap_or_default()
+            )));
+
+            assert!(body.contains(&format!(
+                "kernel_version=\"{}\"",
+                System::kernel_version().unwrap_or_default()
+            )));
+        }
+    }
 }
