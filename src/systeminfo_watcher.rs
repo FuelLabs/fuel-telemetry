@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicI32, Ordering},
         LazyLock,
     },
     time::Duration,
@@ -75,7 +75,7 @@ fn config() -> Result<&'static SystemInfoWatcherConfig> {
 pub struct SystemInfoWatcher;
 
 /// The PID of the currently running `SystemInfoWatcher` daemon
-pub static PID: AtomicUsize = AtomicUsize::new(0);
+pub static PID: AtomicI32 = AtomicI32::new(0);
 
 impl SystemInfoWatcher {
     pub fn new() -> Result<Self> {
@@ -88,6 +88,8 @@ impl SystemInfoWatcher {
             return Ok(());
         }
 
+        let logfile = &config().map_err(into_recoverable)?.logfile;
+
         // Prevent recursive calls to start()
         static STARTED: AtomicBool = AtomicBool::new(false);
 
@@ -99,17 +101,26 @@ impl SystemInfoWatcher {
 
         // Even though we won't be hanging around long, we still daemonise
         // so that we don't get in the way of the calling process
-        if daemonise(&config().map_err(into_recoverable)?.logfile)? {
-            // If we are the parent, immediately return
-            return Ok(());
+        match daemonise(logfile) {
+            Ok(Some(pid)) => {
+                // We are the parent, so record the PID then immediately return
+                PID.store(pid.as_raw(), Ordering::Relaxed);
+                return Ok(());
+            }
+            Err(e) => {
+                // Couldn't daemonise, so clear the PID before returning the error
+                STARTED.store(false, Ordering::Relaxed);
+                return Err(e);
+            }
+            Ok(None) => {
+                // We are the child process, so continue as the `SystemInfoWatcher`...
+                PID.store(getpid().as_raw(), Ordering::Relaxed);
+            }
         }
 
         // From here on, we are no longer the original process, so the caller should
         // treat errors as fatal. This means that on error the process should exit
         // immediately as there should not be two identical flows of execution
-
-        // Record the PID of the daemon so we can kill it from tests
-        PID.store(getpid().as_raw() as usize, Ordering::Relaxed);
 
         // As we record system metrics via a `TelemetryLayer`, we will need our
         // own `tracing` `Subscriber` as the orginial `Subscriber` lives in a
@@ -137,15 +148,16 @@ impl SystemInfoWatcher {
     }
 
     /// Kill the `SystemInfoWatcher` daemon if one is running
-    pub fn kill() -> Result<()> {
+    pub fn kill() -> Result<bool> {
         let pid = PID.load(Ordering::Relaxed);
 
-        if pid != 0 {
-            kill(Pid::from_raw(pid as i32), SIGILL)?;
+        if pid > 0 {
+            kill(Pid::from_raw(pid), SIGILL)?;
             PID.store(0, Ordering::Relaxed);
+            return Ok(true);
         }
 
-        Ok(())
+        Ok(false)
     }
 
     fn poll_systeminfo(&self) -> Result<()> {
