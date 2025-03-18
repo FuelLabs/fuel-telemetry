@@ -6,7 +6,7 @@ use crate::{
 use nix::{
     fcntl::{Flock, FlockArg},
     sys::{
-        signal::{kill, Signal::SIGILL},
+        signal::{kill, Signal::SIGKILL},
         stat::fstat,
     },
     time::ClockId,
@@ -146,7 +146,7 @@ impl SystemInfoWatcher {
         let pid = PID.load(Ordering::Relaxed);
 
         if pid > 0 {
-            kill(Pid::from_raw(pid), SIGILL)?;
+            kill(Pid::from_raw(pid), SIGKILL)?;
             PID.store(0, Ordering::Relaxed);
             return Ok(true);
         }
