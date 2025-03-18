@@ -1377,8 +1377,7 @@ mod find_telemetry_files {
 
         old_file
             .set_modified(
-                SystemTime::now()
-                    - Duration::from_secs(config().unwrap().poll_interval.as_secs()),
+                SystemTime::now() - Duration::from_secs(config().unwrap().poll_interval.as_secs()),
             )
             .unwrap();
 
