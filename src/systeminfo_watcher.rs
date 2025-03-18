@@ -1,7 +1,6 @@
 use crate::{
-    self as fuel_telemetry, daemonise, enforce_singleton, info, into_recoverable,
-    new_with_watchers_and_init, span, telemetry_config, EnvSetting, Level, Result, TelemetryError,
-    WatcherResult,
+    self as fuel_telemetry, daemonise, enforce_singleton, info, into_recoverable, span,
+    telemetry_config, EnvSetting, Level, Result, TelemetryError, WatcherResult,
 };
 
 use nix::{
@@ -26,6 +25,7 @@ use std::{
     time::Duration,
 };
 use sysinfo::{MemoryRefreshKind, System};
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Debug, Clone)]
 struct SystemInfoWatcherConfig {
@@ -111,15 +111,20 @@ impl SystemInfoWatcher {
         // Record the PID of the daemon so we can kill it from tests
         PID.store(getpid().as_raw() as usize, Ordering::Relaxed);
 
+        // As we record system metrics via a `TelemetryLayer`, we will need our
+        // own `tracing` `Subscriber` as the orginial `Subscriber` lives in a
+        // thread within a different process space as we've since daemonised.
+        //
         // Warning: We need to create the `TelemetryLayer` after daemonising
         // as there is a race condition in the thread runtime of `tracing` and
         // the tokio runtime of `Reqwest`. Swapping order of the two could lead to
         // possible deadlocks.
         //
         // Also, we need to set the bucket name as the SystemInfoWatcher is
-        // global rather than being crate/process specific
+        // system-wide rather than being crate/process specific
         set_var("TELEMETRY_PKG_NAME", "systeminfo_watcher");
-        let _guard = new_with_watchers_and_init!()?;
+        let (telemetry_layer, _guard) = fuel_telemetry::new!()?;
+        tracing_subscriber::registry().with(telemetry_layer).init();
 
         // Enforce a singleton to ensure we are the only process submitting
         // telemetry to InfluxDB
