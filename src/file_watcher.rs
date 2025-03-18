@@ -521,15 +521,9 @@ fn find_telemetry_files_with_read_dir_fn(
 }
 
 #[cfg(test)]
-fn setup_fuelup_home() {
-    let tmp_dir = std::env::temp_dir().join(format!("fuelup-test-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&tmp_dir).unwrap();
-    std::env::set_var("FUELUP_HOME", tmp_dir.to_str().unwrap());
-}
-
-#[cfg(test)]
 mod config {
     use super::*;
+    use crate::setup_fuelup_home;
     use dirs::home_dir;
     use rusty_fork::rusty_fork_test;
     use std::env::set_var;
@@ -610,6 +604,9 @@ mod config {
 
         #[test]
         fn all_set() {
+            setup_fuelup_home();
+            let fuelup_home = var("FUELUP_HOME").unwrap();
+
             set_var("FILEWATCHER_POLL_INTERVAL", "2222");
             set_var("INFLUXDB_URL", "http://localhost:8000");
             set_var("INFLUXDB_ORG", "org-name");
@@ -644,7 +641,7 @@ mod new {
 #[cfg(test)]
 mod start {
     use super::*;
-    use crate::{errors::into_fatal, WatcherError};
+    use crate::{errors::into_fatal, setup_fuelup_home, WatcherError};
     use nix::{
         sys::wait::{waitpid, WaitStatus},
         unistd::{dup2, fork, pipe, ForkResult},
@@ -993,6 +990,7 @@ mod kill {
 #[cfg(test)]
 mod poll_directory {
     use super::*;
+    use crate::setup_fuelup_home;
     use rusty_fork::rusty_fork_test;
     use std::{fs::File, io::Write, sync::OnceLock};
 
@@ -1361,6 +1359,7 @@ mod poll_directory {
 #[cfg(test)]
 mod find_telemetry_files {
     use super::*;
+    use crate::setup_fuelup_home;
     use rusty_fork::rusty_fork_test;
     use std::{fs::File, io::Write, time::SystemTime};
 
