@@ -561,7 +561,6 @@ mod telemetry_config {
     use super::*;
     use rusty_fork::rusty_fork_test;
     use std::{env::set_var, path::Path};
-    use tempfile::tempdir;
 
     rusty_fork_test! {
         #[test]
@@ -573,6 +572,7 @@ mod telemetry_config {
                 telemetry_config.fuelup_tmp,
                 fuelup_home.join(".fuelup/tmp").to_str().unwrap()
             );
+
             assert_eq!(
                 telemetry_config.fuelup_log,
                 fuelup_home.join(".fuelup/log").to_str().unwrap()
@@ -584,19 +584,13 @@ mod telemetry_config {
 
         #[test]
         fn fuelup_home_set() {
-            let tmpdir = tempdir().unwrap();
-            set_var("FUELUP_HOME", tmpdir.path().to_str().unwrap());
+            setup_fuelup_home();
 
+            let tempdir = var("FUELUP_HOME").unwrap();
             let telemetry_config = telemetry_config().unwrap();
 
-            assert_eq!(
-                telemetry_config.fuelup_tmp,
-                tmpdir.path().join("tmp").to_str().unwrap()
-            );
-            assert_eq!(
-                telemetry_config.fuelup_log,
-                tmpdir.path().join("log").to_str().unwrap()
-            );
+            assert_eq!(telemetry_config.fuelup_tmp, format!("{}/tmp", tempdir));
+            assert_eq!(telemetry_config.fuelup_log, format!("{}/log", tempdir));
 
             assert!(Path::new(&telemetry_config.fuelup_tmp).is_dir());
             assert!(Path::new(&telemetry_config.fuelup_log).is_dir());
@@ -604,12 +598,14 @@ mod telemetry_config {
 
         #[test]
         fn fuelup_tmp_set() {
-            let tmpdir = tempdir().unwrap();
-            set_var("FUELUP_TMP", tmpdir.path().to_str().unwrap());
+            let tmpdir = std::env::temp_dir().join(format!("fuelup-test-{}", uuid::Uuid::new_v4()));
+            set_var("FUELUP_TMP", tmpdir.to_str().unwrap());
+            std::fs::create_dir_all(&tmpdir).unwrap();
 
             let telemetry_config = telemetry_config().unwrap();
 
-            assert_eq!(telemetry_config.fuelup_tmp, tmpdir.path().to_str().unwrap());
+            assert_eq!(telemetry_config.fuelup_tmp, tmpdir.to_str().unwrap());
+
             assert_eq!(
                 telemetry_config.fuelup_log,
                 home_dir().unwrap().join(".fuelup/log").to_str().unwrap()
@@ -621,8 +617,9 @@ mod telemetry_config {
 
         #[test]
         fn fuelup_log_set() {
-            let tmpdir = tempdir().unwrap();
-            set_var("FUELUP_LOG", tmpdir.path().to_str().unwrap());
+            let tmpdir = std::env::temp_dir().join(format!("fuelup-test-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&tmpdir).unwrap();
+            set_var("FUELUP_LOG", tmpdir.to_str().unwrap());
 
             let telemetry_config = telemetry_config().unwrap();
 
@@ -630,7 +627,8 @@ mod telemetry_config {
                 telemetry_config.fuelup_tmp,
                 home_dir().unwrap().join(".fuelup/tmp").to_str().unwrap()
             );
-            assert_eq!(telemetry_config.fuelup_log, tmpdir.path().to_str().unwrap());
+
+            assert_eq!(telemetry_config.fuelup_log, tmpdir.to_str().unwrap());
 
             assert!(Path::new(&telemetry_config.fuelup_tmp).is_dir());
             assert!(Path::new(&telemetry_config.fuelup_log).is_dir());
@@ -714,7 +712,7 @@ mod enforce_singleton {
 
                     enforce_singleton_with_helpers(&lockfile, &mut flock_ewouldblock).unwrap();
 
-                    // Fallback exit
+                    // Fallback exit, which rusty_fork will catch
                     exit(99);
                 }
             }
@@ -813,7 +811,6 @@ mod daemonise {
             }
 
             let result = daemonise_with_helpers(&PathBuf::from("test.log"), &mut PipeFailed);
-
             let expected_error = TelemetryError::Nix(Errno::EOWNERDEAD.to_string());
 
             assert_eq!(
@@ -1085,6 +1082,8 @@ mod daemonise {
 
         #[test]
         fn setup_stdio_failed() {
+            setup_fuelup_home();
+
             struct SetupStdioFailed;
 
             impl DaemoniseHelpers for SetupStdioFailed {
@@ -1253,6 +1252,8 @@ mod daemonise {
 
         #[test]
         fn close_failed_with_ebadf() {
+            setup_fuelup_home();
+
             struct CloseFailed;
 
             impl DaemoniseHelpers for CloseFailed {
