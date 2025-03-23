@@ -580,6 +580,8 @@ mod start {
     rusty_fork_test! {
         #[test]
         fn opted_out_is_true() {
+            setup_fuelup_home();
+
             set_var("FUELUP_NO_TELEMETRY", "true");
 
             let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
@@ -593,6 +595,8 @@ mod start {
 
         #[test]
         fn opted_out_is_empty() {
+            setup_fuelup_home();
+
             // Even though it's empty, we only care if it's set
             set_var("FUELUP_NO_TELEMETRY", "");
 
@@ -607,6 +611,8 @@ mod start {
 
         #[test]
         fn already_started() {
+            setup_fuelup_home();
+
             STARTED.store(true, Ordering::Relaxed);
             PID.store(1, Ordering::Relaxed);
 
@@ -628,6 +634,8 @@ mod start {
 
         #[test]
         fn daemonise_failed() {
+            setup_fuelup_home();
+
             struct DaemoniseFailed;
 
             impl StartHelpers for DaemoniseFailed {
@@ -646,6 +654,8 @@ mod start {
 
         #[test]
         fn daemonise_is_parent() {
+            setup_fuelup_home();
+
             struct DaemoniseIsParent;
 
             impl StartHelpers for DaemoniseIsParent {
@@ -664,6 +674,8 @@ mod start {
 
         #[test]
         fn new_fuel_telemetry_failed() {
+            setup_fuelup_home();
+
             struct NewFuelTelemetryFailed;
 
             impl StartHelpers for NewFuelTelemetryFailed {
@@ -698,6 +710,8 @@ mod start {
 
         #[test]
         fn enforce_singleton_failed() {
+            setup_fuelup_home();
+
             struct EnforceSingletonFailed;
 
             impl StartHelpers for EnforceSingletonFailed {
@@ -718,6 +732,8 @@ mod start {
 
         #[test]
         fn poll_systeminfo_failed() {
+            setup_fuelup_home();
+
             struct PollSysteminfoFailed;
 
             impl StartHelpers for PollSysteminfoFailed {
