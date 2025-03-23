@@ -282,8 +282,7 @@ pub(crate) fn enforce_singleton(filename: &Path) -> Result<Flock<File>> {
     enforce_singleton_with_helpers(filename, &mut DefaultEnforceSingletonHelpers)
 }
 
-#[doc(hidden)]
-pub(crate) fn enforce_singleton_with_helpers(
+fn enforce_singleton_with_helpers(
     filename: &Path,
     helpers: &mut impl EnforceSingletonHelpers,
 ) -> Result<Flock<File>> {
@@ -327,7 +326,7 @@ pub(crate) fn daemonise(log_filename: &PathBuf) -> WatcherResult<Option<Pid>> {
     daemonise_with_helpers(log_filename, &mut helpers)
 }
 
-pub(crate) fn daemonise_with_helpers(
+fn daemonise_with_helpers(
     log_filename: &PathBuf,
     helpers: &mut impl DaemoniseHelpers,
 ) -> WatcherResult<Option<Pid>> {
@@ -430,7 +429,7 @@ pub(crate) fn daemonise_with_helpers(
     Ok(None)
 }
 
-pub(crate) trait DaemoniseHelpers {
+trait DaemoniseHelpers {
     fn flush<T: Write + std::os::fd::AsRawFd>(
         &mut self,
         stream: &mut T,
@@ -511,7 +510,7 @@ pub(crate) fn setup_stdio(log_filename: &str) -> std::result::Result<(), Telemet
     setup_stdio_with_helpers(log_filename, &mut helpers)
 }
 
-pub(crate) fn setup_stdio_with_helpers(
+fn setup_stdio_with_helpers(
     log_filename: &str,
     helpers: &mut impl SetupStdioHelpers,
 ) -> std::result::Result<(), TelemetryError> {

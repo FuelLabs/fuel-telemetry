@@ -292,7 +292,7 @@ impl FileWatcher {
     }
 }
 
-pub trait StartHelpers {
+trait StartHelpers {
     fn daemonise(&self, logfile: &PathBuf) -> WatcherResult<Option<Pid>> {
         daemonise(logfile)
     }
