@@ -94,8 +94,6 @@ pub struct FileWatcher {
     client: Option<Client>,
     // The request to send to InfluxDB
     request: Option<Request>,
-    // The path to its lockfile ($FUELUP_TMP/telemetry-file-watcher.lock)
-    lockfile_path: PathBuf,
 }
 
 // Prevent recursive calls to start()
@@ -153,8 +151,6 @@ impl FileWatcher {
         Ok(Self {
             client: None,
             request: None,
-            lockfile_path: Path::new(&telemetry_config()?.fuelup_tmp)
-                .join(config()?.lockfile.clone()),
         })
     }
 
@@ -210,7 +206,7 @@ impl FileWatcher {
         loop {
             // Enforce a singleton to ensure we are the only process submitting
             // telemetry to InfluxDB
-            let _lock = helpers.enforce_singleton(&self.lockfile_path)?;
+            let _lock = helpers.enforce_singleton(&config()?.lockfile)?;
 
             // Poll for aged-out telemetry files
             let directory_empty = helpers.poll_directory(self)?;
@@ -639,12 +635,7 @@ mod new {
 
     #[test]
     fn new() {
-        let file_watcher = FileWatcher::new().unwrap();
-
-        assert_eq!(
-            file_watcher.lockfile_path,
-            Path::new(&telemetry_config().unwrap().fuelup_tmp).join("telemetry-file-watcher.lock")
-        );
+        assert!(FileWatcher::new().is_ok());
     }
 }
 
