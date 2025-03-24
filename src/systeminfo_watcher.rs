@@ -67,6 +67,8 @@ fn config() -> Result<&'static SystemInfoWatcherConfig> {
 
 // Although there's no need to keep the state of this watcher, keep it consistent
 // with the other watchers
+
+#[derive(Default)]
 pub struct SystemInfoWatcher;
 
 // Prevent recursive calls to start()
@@ -76,8 +78,8 @@ static STARTED: AtomicBool = AtomicBool::new(false);
 pub static PID: AtomicI32 = AtomicI32::new(0);
 
 impl SystemInfoWatcher {
-    pub fn new() -> Result<Self> {
-        Ok(Self {})
+    pub fn new() -> Self {
+        Self
     }
 
     pub fn start(&mut self) -> WatcherResult<()> {
@@ -560,16 +562,6 @@ mod config {
 }
 
 #[cfg(test)]
-mod new {
-    use super::*;
-
-    #[test]
-    fn new() {
-        assert!(SystemInfoWatcher::new().is_ok());
-    }
-}
-
-#[cfg(test)]
 mod start {
     use super::*;
     use crate::{into_recoverable, setup_fuelup_home, WatcherError};
@@ -584,7 +576,7 @@ mod start {
 
             set_var("FUELUP_NO_TELEMETRY", "true");
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start();
 
             // Make sure it didn't continue and init values
@@ -600,7 +592,7 @@ mod start {
             // Even though it's empty, we only care if it's set
             set_var("FUELUP_NO_TELEMETRY", "");
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start();
 
             // Make sure it didn't continue and init values
@@ -616,7 +608,7 @@ mod start {
             STARTED.store(true, Ordering::Relaxed);
             PID.store(1, Ordering::Relaxed);
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start();
 
             // Make sure it didn't continue and init values
@@ -644,7 +636,7 @@ mod start {
                 }
             }
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start_with_helpers(&DaemoniseFailed);
 
             assert_eq!(result, Err(WatcherError::Recoverable(TelemetryError::Mock)));
@@ -664,7 +656,7 @@ mod start {
                 }
             }
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start_with_helpers(&DaemoniseIsParent);
 
             assert_eq!(result, Ok(()));
@@ -702,7 +694,7 @@ mod start {
                 }
             }
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start_with_helpers(&NewFuelTelemetryFailed);
 
             assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
@@ -724,7 +716,7 @@ mod start {
                 }
             }
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start_with_helpers(&EnforceSingletonFailed);
 
             assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
@@ -746,7 +738,7 @@ mod start {
                 }
             }
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start_with_helpers(&PollSysteminfoFailed);
 
             assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
@@ -756,7 +748,7 @@ mod start {
         fn ok() {
             setup_fuelup_home();
 
-            let mut systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let mut systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.start();
             let pid = PID.load(Ordering::Relaxed);
 
@@ -858,7 +850,7 @@ mod poll_systeminfo {
                 }
             }
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result =
                 systeminfo_watcher.poll_systeminfo_with_helpers(&mut CreateLockedTouchfileFailed);
 
@@ -883,7 +875,7 @@ mod poll_systeminfo {
                 }
             }
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result =
                 systeminfo_watcher.poll_systeminfo_with_helpers(&mut OpenAndLockTouchfileFailed);
 
@@ -908,7 +900,7 @@ mod poll_systeminfo {
                 }
             }
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut NowFailed);
 
             assert_eq!(
@@ -937,7 +929,7 @@ mod poll_systeminfo {
                 }
             }
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut FstatFailed);
 
             assert_eq!(
@@ -958,7 +950,7 @@ mod poll_systeminfo {
                 .open(Path::new(&config().unwrap().touchfile))
                 .unwrap();
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.poll_systeminfo();
 
             assert_eq!(result, Ok(()));
@@ -988,7 +980,7 @@ mod poll_systeminfo {
                 }
             }
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut DetectVmFailed);
 
             assert_eq!(result, Err(TelemetryError::Mock));
@@ -1018,7 +1010,7 @@ mod poll_systeminfo {
                 }
             }
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut SetLenFailed);
 
             assert_eq!(result, Err(TelemetryError::IO("Mock error".to_string())));
@@ -1048,7 +1040,7 @@ mod poll_systeminfo {
                 }
             }
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
             let result = systeminfo_watcher.poll_systeminfo_with_helpers(&mut SyncAllFailed);
 
             assert_eq!(result, Err(TelemetryError::IO("Mock error".to_string())));
@@ -1069,7 +1061,7 @@ mod poll_systeminfo {
 
             touchfile.set_modified(old_modified).unwrap();
 
-            let systeminfo_watcher = SystemInfoWatcher::new().unwrap();
+            let systeminfo_watcher = SystemInfoWatcher::new();
 
             // Create a telemetry layer so we the telemetry file is written to
             set_var("TELEMETRY_PKG_NAME", "systeminfo_watcher");

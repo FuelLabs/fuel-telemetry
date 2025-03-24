@@ -89,6 +89,7 @@ fn config() -> Result<&'static FileWatcherConfig> {
 //
 
 /// A `FileWatcher` polls for aged-out telemetry files and sends them to InfluxDB
+#[derive(Default)]
 pub struct FileWatcher {
     // The client used to send requests to InfluxDB
     client: Option<Client>,
@@ -147,11 +148,8 @@ impl FileWatcher {
     /// you must create the `FileWatcher` before the `TelemetryLayer` as there is
     /// a race condition in the thread runtime of `tracing` and the tokio runtime
     /// of `Reqwest`. Swapping order of the two could lead to possible deadlocks.
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            client: None,
-            request: None,
-        })
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Start the `FileWatcher`
@@ -635,7 +633,10 @@ mod new {
 
     #[test]
     fn new() {
-        assert!(FileWatcher::new().is_ok());
+        let file_watcher = FileWatcher::new();
+
+        assert!(file_watcher.client.is_none());
+        assert!(file_watcher.request.is_none());
     }
 }
 
@@ -660,7 +661,7 @@ mod start {
         fn opted_out_is_true() {
             set_var("FUELUP_NO_TELEMETRY", "true");
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start();
 
             // Make sure it didn't continue and init values
@@ -676,7 +677,7 @@ mod start {
             // Even though it's empty, we only care if it's set
             set_var("FUELUP_NO_TELEMETRY", "");
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start();
 
             // Make sure it didn't continue and init values
@@ -692,7 +693,7 @@ mod start {
             STARTED.store(true, Ordering::Relaxed);
             PID.store(1, Ordering::Relaxed);
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start();
 
             // Make sure it didn't continue and init values
@@ -722,7 +723,7 @@ mod start {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start_with_helpers(&DaemoniseFailed);
 
             assert_eq!(
@@ -743,7 +744,7 @@ mod start {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start_with_helpers(&DaemoniseIsParent);
 
             assert_eq!(result, Ok(()));
@@ -765,7 +766,7 @@ mod start {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start_with_helpers(&BuildRequestInvalidClient);
 
             assert_eq!(
@@ -794,7 +795,7 @@ mod start {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start_with_helpers(&BuildRequestBuildFailed);
 
             assert_eq!(
@@ -819,7 +820,7 @@ mod start {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start_with_helpers(&EnforceSingletonFailed);
 
             assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
@@ -841,7 +842,7 @@ mod start {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start_with_helpers(&PollDirectoryFailed);
 
             assert_eq!(result, Err(WatcherError::Fatal(TelemetryError::Mock)));
@@ -921,7 +922,7 @@ mod start {
                     stdout().write_all(&pid_bytes).unwrap();
                     stdout().flush().unwrap();
 
-                    let mut file_watcher = FileWatcher::new().unwrap();
+                    let mut file_watcher = FileWatcher::new();
                     let _ = file_watcher.start_with_helpers(&Poll);
 
                     // Fallback status code
@@ -1023,7 +1024,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut FindTelemetryFilesFailed);
 
             assert_eq!(result, Err(TelemetryError::Mock));
@@ -1041,7 +1042,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut FindTelemetryFilesEmpty);
 
             assert_eq!(result, Ok(true));
@@ -1063,7 +1064,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut FlockFailed);
 
             assert_eq!(
@@ -1088,7 +1089,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut BufferedReaderFailed);
 
             assert_eq!(
@@ -1113,7 +1114,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut EmptyFile);
 
             // The test file was simulated as empty, so it should stick around
@@ -1136,7 +1137,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut Base64DecodeFailed);
 
             assert_eq!(
@@ -1162,7 +1163,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut StringFromUtf8Failed);
 
             assert_eq!(
@@ -1192,7 +1193,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut ParseEventFailed);
 
             assert_eq!(result, Err(TelemetryError::Mock));
@@ -1223,7 +1224,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut LineProtocolFromUtf8Failed::default());
 
             assert_eq!(
@@ -1248,7 +1249,7 @@ mod poll_directory {
                 }
             }
 
-            let file_watcher = FileWatcher::new().unwrap();
+            let file_watcher = FileWatcher::new();
             let result = file_watcher.poll_directory_with_helpers(&mut BuildRequestFailed);
 
             assert_eq!(result, Err(TelemetryError::Mock));
@@ -1271,7 +1272,7 @@ mod poll_directory {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let start_helpers = DefaultStartHelpers;
 
             file_watcher.client = Some(Client::new());
@@ -1304,7 +1305,7 @@ mod poll_directory {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let start_helpers = DefaultStartHelpers;
 
             file_watcher.client = Some(Client::new());
@@ -1342,7 +1343,7 @@ mod poll_directory {
                 }
             }
 
-            let mut file_watcher = FileWatcher::new().unwrap();
+            let mut file_watcher = FileWatcher::new();
             let start_helpers = DefaultStartHelpers;
 
             file_watcher.client = Some(Client::new());

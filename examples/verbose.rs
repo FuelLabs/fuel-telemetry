@@ -8,7 +8,7 @@ fn main() {
     // order of the two could lead to possible deadlocks.
 
     // Create a `FileWatcher` to submit telemetry to InfluxDB
-    let mut file_watcher = file_watcher::FileWatcher::new().unwrap();
+    let mut file_watcher = file_watcher::FileWatcher::new();
 
     // Start the `FileWatcher`
     file_watcher.start().unwrap_or_else(|e| {
@@ -16,7 +16,7 @@ fn main() {
     });
 
     // Create a `SystemInfoWatcher` to record system info
-    let mut systeminfo_watcher = systeminfo_watcher::SystemInfoWatcher::new().unwrap();
+    let mut systeminfo_watcher = systeminfo_watcher::SystemInfoWatcher::new();
 
     // Start the `SystemInfoWatcher`
     systeminfo_watcher.start().unwrap_or_else(|e| {
