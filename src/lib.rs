@@ -381,6 +381,7 @@ fn daemonise_with_helpers(
 
     let pid = getpid();
     helpers.write_pipe(write_fd, pid).map_err(into_fatal)?;
+
     // Setup stdio to write errors to the logfile while discarding any IO to
     // the controlling terminal
     let fuelup_tmp = helpers

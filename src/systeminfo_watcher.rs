@@ -109,8 +109,9 @@ impl SystemInfoWatcher {
                 return Ok(());
             }
             Err(e) => {
-                // Couldn't daemonise, so clear the PID before returning the error
+                // Couldn't daemonise, so clear globals before returning the error
                 STARTED.store(false, Ordering::Relaxed);
+                PID.store(0, Ordering::Relaxed);
                 return Err(e);
             }
             Ok(None) => {
