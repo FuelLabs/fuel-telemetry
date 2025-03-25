@@ -30,7 +30,7 @@ fn get_public_data(seed: u64) {
     // <process that takes a while>
     let duration = start.elapsed().as_secs_f64();
 
-    // The following `Event` will be printed and sent to InfluxDB
+    // The following `Event` will sent to InfluxDB
     info_telemetry!(seed, duration);
 }
 

@@ -13,7 +13,7 @@ Steps to get `fuel-telemetry` going:
 - Start a `SystemInfoWatcher` so that system info will be recorded
 - Start generating telemetry and non-telemetry `Event`s
 
-Most of these steps are hidden away behind convenience macros within `TelemetryLayer`.
+Fortunately, most of these steps are hidden away behind convenience macros...
 
 ## Using `fuel-telemetry`
 
@@ -29,8 +29,7 @@ following convenience macros:
 - `trace_telemetry!()`
 
 When you want to record `tracing` `Event`s but don't want them to be sent to
-InfluxDB, switch to using the regular non-`_telemetry` suffixed `tracing`
-macros:
+InfluxDB, use the regular non-`_telemetry` suffixed `tracing` macros:
 
 - `info!()`
 - `warn!()`
@@ -47,11 +46,39 @@ info_telemetry!("This event will be recorded and sent to InfluxDB");
 
 For detailed examples, see `examples/*.rs`.
 
+### Already Using `forc-tracing`
+
+If you're already using `forc-tracing` within your applications and libraries,
+the quickest way to get going is to first add the `telemetry` feature to
+`forc-tracing` in your `Cargo.toml`:
+
+```toml
+[dependencies]
+forc-tracing = { version = "0.48", features = ["telemetry"] }
+```
+
+Then as above, use the convenience macros to record telemetry `Event`s:
+
+```rust
+use forc_tracing::{
+    init_tracing_subscriber, println_green, println_red, println_yellow, telemetry::*,
+};
+
+fn main() {
+    init_tracing_subscriber(Default::default());
+
+    println_red("Stop");
+    println_yellow("Slow down");
+    println_green("Go");
+
+    info_telemetry!("This event will be sent to InfluxDB");
+}
+```
 
 ### Applications without Existing Tracing
 
-If you're writing an app where `fuel-telemetry` will be your only `tracing`
-`Layer` and `Subscriber`, the quickest way to get going is:
+If you're writing an application where `fuel-telemetry` will be your only
+`tracing` `Layer` and `Subscriber`, the quickest way to get going is:
 
 ```rust
 use fuel_telemetry::prelude::*;
@@ -65,9 +92,10 @@ fn main() {
 
 ### Applications with Existing Tracing
 
-If you're writing an app where `fuel-telemetry` will need to work along side
-other `tracing` `Layer`s or `Subscriber`s, you will need to create a
-`TelemetryLayer` by hand and then add it to your existing `Subscriber` e.g:
+If you're writing an application where `fuel-telemetry` will need to work along
+side other `tracing` `Layer`s or `Subscriber`s, you will need to create a
+`TelemetryLayer` by hand and then add it to your existing `Subscriber` before
+calling telemetry macros e.g:
 
 ```rust
 use fuel_telemetry::prelude::*;
@@ -89,7 +117,7 @@ fn main() {
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
     info!("This event will be sent to stdout");
-    info_telemetry!("This event will be sent to stdout AND InfluxDB");
+    info_telemetry!("This event will be sent to InfluxDB");
 }
 ```
 
@@ -100,7 +128,14 @@ will clobber any set by consumer applications. As such, `fuel-telemetry` will
 prevent your code from compiling if you try to set the global default subscriber
 via the constructor macro `new_with_watchers_and_init!()`.**
 
-Rely on the library consumer to set the global default subscriber.
+As above, to get started recording telemetry within your libraries, use the
+convenience macros to record telemetry `Event`s:
+```rust
+use fuel_telemetry::prelude::*;
+
+info!("This event will be recorded");
+info_telemetry!("This event will be recorded and sent to InfluxDB");
+```
 
 ## Manually Enabling Telemetry
 
