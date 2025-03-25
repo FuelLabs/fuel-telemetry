@@ -192,10 +192,10 @@ trait FormatEventHelpers {
                     .and_then(|captures| captures.get(1))
                     .map(|m| m.as_str());
 
-                if let Some("false") = telemetry_setting {
-                    return false;
-                } else if let Some("true") = telemetry_setting {
-                    return true;
+                match telemetry_setting {
+                    Some("false") => return false,
+                    Some("true") => return true,
+                    _ => continue,
                 }
             }
         }
