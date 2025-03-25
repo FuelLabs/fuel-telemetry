@@ -34,6 +34,12 @@ use std::{
 // Module config
 //
 
+const PROCESS_NAME: &str = "telemetry-file-watcher";
+const INFLUXDB_ORG: &str = "Dev%20Team";
+const INFLUXDB_BUCKET: &str = "telemetry";
+const INFLUXDB_URL: &str = "https://us-east-1-1.aws.cloud2.influxdata.com";
+const INFLUXDB_TOKEN: &str = "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag==";
+
 /// Configuration for `FileWatcher`
 #[derive(Debug, Clone)]
 struct FileWatcherConfig {
@@ -64,17 +70,17 @@ fn config() -> Result<&'static FileWatcherConfig> {
             "{}/api/v2/write?org={}&bucket={}&precision=ns",
             get_env(
                 "INFLUXDB_URL",
-                "https://us-east-1-1.aws.cloud2.influxdata.com"
+                INFLUXDB_URL
             ),
-            get_env("INFLUXDB_ORG", "Dev%20Team"),
-            get_env("INFLUXDB_BUCKET", "telemetry"),
+            get_env("INFLUXDB_ORG", INFLUXDB_ORG),
+            get_env("INFLUXDB_BUCKET", INFLUXDB_BUCKET),
         );
 
         Ok(FileWatcherConfig {
-            lockfile: Path::new(&telemetry_config()?.fuelup_tmp).join("telemetry-file-watcher.lock"),
-            logfile: Path::new(&telemetry_config()?.fuelup_log).join("telemetry-file-watcher.log"),
+            lockfile: Path::new(&telemetry_config()?.fuelup_tmp).join(format!("{}.lock", PROCESS_NAME)),
+            logfile: Path::new(&telemetry_config()?.fuelup_log).join(format!("{}.log", PROCESS_NAME)),
             poll_interval: Duration::from_secs(poll_interval),
-            influxdb_token: get_env("INFLUXDB_TOKEN", "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag=="),
+            influxdb_token: get_env("INFLUXDB_TOKEN", INFLUXDB_TOKEN),
             influxdb_url,
         })
     });
@@ -533,7 +539,7 @@ mod config {
                 Path::new(
                     &home_dir()
                         .unwrap()
-                        .join(".fuelup/tmp/telemetry-file-watcher.lock")
+                        .join(format!(".fuelup/tmp/{}.lock", PROCESS_NAME))
                 )
             );
             assert_eq!(
@@ -541,12 +547,18 @@ mod config {
                 Path::new(
                     &home_dir()
                         .unwrap()
-                        .join(".fuelup/log/telemetry-file-watcher.log")
+                        .join(format!(".fuelup/log/{}.log", PROCESS_NAME))
                 )
             );
             assert_eq!(config.poll_interval, Duration::from_secs(3600));
-            assert_eq!(config.influxdb_token, "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag==");
-            assert_eq!(config.influxdb_url, "https://us-east-1-1.aws.cloud2.influxdata.com/api/v2/write?org=Dev%20Team&bucket=telemetry&precision=ns");
+            assert_eq!(config.influxdb_token, INFLUXDB_TOKEN);
+            
+            assert_eq!(config.influxdb_url, format!(
+                "{}/api/v2/write?org={}&bucket={}&precision=ns",
+                INFLUXDB_URL,
+                INFLUXDB_ORG,
+                INFLUXDB_BUCKET
+            ));
         }
 
         #[test]
@@ -577,8 +589,11 @@ mod config {
             let config = config().unwrap();
             assert_eq!(
                 config.influxdb_url,
-                "http://localhost:8000/api/v2/write?org=Dev%20Team&bucket=telemetry&precision=ns"
-            );
+                format!("{}/api/v2/write?org={}&bucket={}&precision=ns",
+                "http://localhost:8000",
+                INFLUXDB_ORG,
+                INFLUXDB_BUCKET
+            ));
         }
 
         #[test]
@@ -586,7 +601,12 @@ mod config {
             set_var("INFLUXDB_ORG", "org-name");
 
             let config = config().unwrap();
-            assert_eq!(config.influxdb_url, "https://us-east-1-1.aws.cloud2.influxdata.com/api/v2/write?org=org-name&bucket=telemetry&precision=ns");
+            assert_eq!(config.influxdb_url, format!(
+                "{}/api/v2/write?org={}&bucket={}&precision=ns",
+                INFLUXDB_URL,
+                "org-name",
+                INFLUXDB_BUCKET
+            ));
         }
 
         #[test]
@@ -594,7 +614,12 @@ mod config {
             set_var("INFLUXDB_BUCKET", "bucket-name");
 
             let config = config().unwrap();
-            assert_eq!(config.influxdb_url, "https://us-east-1-1.aws.cloud2.influxdata.com/api/v2/write?org=Dev%20Team&bucket=bucket-name&precision=ns");
+            assert_eq!(config.influxdb_url, format!(
+                "{}/api/v2/write?org={}&bucket={}&precision=ns",
+                INFLUXDB_URL,
+                INFLUXDB_ORG,
+                "bucket-name"
+            ));
         }
 
         #[test]
@@ -611,18 +636,22 @@ mod config {
 
             assert_eq!(
                 config.lockfile,
-                Path::new(&format!("{}/tmp/telemetry-file-watcher.lock", &fuelup_home))
+                Path::new(&format!("{}/tmp/{}.lock", &fuelup_home, PROCESS_NAME))
             );
 
             assert_eq!(
                 config.logfile,
-                Path::new(&format!("{}/log/telemetry-file-watcher.log", &fuelup_home))
+                Path::new(&format!("{}/log/{}.log", &fuelup_home, PROCESS_NAME))
             );
             assert_eq!(config.poll_interval, Duration::from_secs(2222));
-            assert_eq!(config.influxdb_token, "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag==");
+            assert_eq!(config.influxdb_token, INFLUXDB_TOKEN);
             assert_eq!(
                 config.influxdb_url,
-                "http://localhost:8000/api/v2/write?org=org-name&bucket=bucket-name&precision=ns"
+                format!("{}/api/v2/write?org={}&bucket={}&precision=ns",
+                    "http://localhost:8000",
+                    "org-name",
+                    "bucket-name"
+                )
             );
         }
     }

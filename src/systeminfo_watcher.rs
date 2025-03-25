@@ -28,6 +28,9 @@ use std::{
 use sysinfo::{MemoryRefreshKind, System};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
+const PROCESS_NAME: &str = "telemetry-systeminfo-watcher";
+const TELEMETRY_PKG_NAME: &str = "systeminfo_watcher";
+
 #[derive(Debug, Clone)]
 struct SystemInfoWatcherConfig {
     // The path to its lockfile
@@ -52,11 +55,11 @@ fn config() -> Result<&'static SystemInfoWatcherConfig> {
                 interval: get_env("SYSTEMINFO_WATCHER_INTERVAL", "2592000").parse()?,
                 metadata_timeout: get_env("METADATA_TIMEOUT", "3").parse()?,
                 lockfile: Path::new(&telemetry_config()?.fuelup_tmp)
-                    .join("telemetry-systeminfo-watcher.lock"),
+                    .join(format!("{}.lock", PROCESS_NAME)),
                 logfile: Path::new(&telemetry_config()?.fuelup_log)
-                    .join("telemetry-systeminfo-watcher.log"),
+                    .join(format!("{}.log", PROCESS_NAME)),
                 touchfile: Path::new(&telemetry_config()?.fuelup_tmp)
-                    .join("telemetry-systeminfo-watcher.touch"),
+                    .join(format!("{}.touch", PROCESS_NAME)),
             })
         });
 
@@ -135,7 +138,7 @@ impl SystemInfoWatcher {
         //
         // Also, we need to set the bucket name as the SystemInfoWatcher is
         // system-wide rather than being crate/process specific
-        set_var("TELEMETRY_PKG_NAME", "systeminfo_watcher");
+        set_var("TELEMETRY_PKG_NAME", TELEMETRY_PKG_NAME);
         let (telemetry_layer, _guard) = helpers.new_fuel_telemetry()?;
         tracing_subscriber::registry().with(telemetry_layer).init();
 
@@ -459,7 +462,7 @@ mod config {
                 Path::new(
                     &home_dir()
                         .unwrap()
-                        .join(".fuelup/tmp/telemetry-systeminfo-watcher.lock")
+                        .join(format!(".fuelup/tmp/{}.lock", PROCESS_NAME))
                 )
             );
 
@@ -468,7 +471,7 @@ mod config {
                 Path::new(
                     &home_dir()
                         .unwrap()
-                        .join(".fuelup/log/telemetry-systeminfo-watcher.log")
+                        .join(format!(".fuelup/log/{}.log", PROCESS_NAME))
                 )
             );
 
@@ -477,7 +480,7 @@ mod config {
                 Path::new(
                     &home_dir()
                         .unwrap()
-                        .join(".fuelup/tmp/telemetry-systeminfo-watcher.touch")
+                        .join(format!(".fuelup/tmp/{}.touch", PROCESS_NAME))
                 )
             );
         }
@@ -538,24 +541,24 @@ mod config {
             assert_eq!(
                 config.lockfile,
                 Path::new(&format!(
-                    "{}/tmp/telemetry-systeminfo-watcher.lock",
-                    &fuelup_home
+                    "{}/tmp/{}.lock",
+                    &fuelup_home, PROCESS_NAME
                 ))
             );
 
             assert_eq!(
                 config.logfile,
                 Path::new(&format!(
-                    "{}/log/telemetry-systeminfo-watcher.log",
-                    &fuelup_home
+                    "{}/log/{}.log",
+                    &fuelup_home, PROCESS_NAME
                 ))
             );
 
             assert_eq!(
                 config.touchfile,
                 Path::new(&format!(
-                    "{}/tmp/telemetry-systeminfo-watcher.touch",
-                    &fuelup_home
+                    "{}/tmp/{}.touch",
+                    &fuelup_home, PROCESS_NAME
                 ))
             );
         }

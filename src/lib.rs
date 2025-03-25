@@ -416,8 +416,6 @@ fn daemonise_with_helpers(
     // We close all file descriptors since any currently opened were inherited
     // from the parent process which we don't care about. Not doing so leaks
     // open file descriptors which could lead to exhaustion.
-    //
-    // Here, 1024 is a safe value i.e MIN(Legacy Linux, MacOS)
     let max_fd = helpers
         .sysconf(SysconfVar::OPEN_MAX)
         .map_err(into_fatal)?
