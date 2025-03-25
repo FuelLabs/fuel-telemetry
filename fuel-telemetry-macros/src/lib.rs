@@ -96,7 +96,7 @@ pub fn new(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                         |_| __reexport_EnvFilter::try_from_default_env()
                             .map_err(|e| fuel_telemetry::TelemetryError::InvalidEnvFilter(e.to_string()))
                     )
-                    .map(|filter| (layer.__inner.with_filter(filter), guard))
+                    .map(|filter| (layer.inner_layer.with_filter(filter), guard))
             })
         }
     }

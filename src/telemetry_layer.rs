@@ -20,7 +20,7 @@ use crate::{
 /// location ($FUEL_HOME/tmp/<crate>.telemetry), ready for ingestion by an
 /// InfluxDB collector.
 pub struct TelemetryLayer {
-    pub __inner: Layer<Registry, DefaultFields, TelemetryFormatter, NonBlocking>,
+    pub inner_layer: Layer<Registry, DefaultFields, TelemetryFormatter, NonBlocking>,
 }
 
 impl TelemetryLayer {
@@ -64,12 +64,12 @@ impl TelemetryLayer {
         };
 
         // We need to disable ANSI codes as it breaks InfluxDB parsing
-        let inner = tracing_subscriber::fmt::layer()
+        let inner_layer = tracing_subscriber::fmt::layer()
             .with_writer(writer)
             .with_ansi(false)
             .event_format(TelemetryFormatter::new());
 
-        Ok((Self { __inner: inner }, guard))
+        Ok((Self { inner_layer }, guard))
     }
 }
 
@@ -94,35 +94,35 @@ impl NewHelpers for DefaultNewHelpers {}
 // Here we simply proxy calls to the inner layer.
 impl LayerTrait<Registry> for TelemetryLayer {
     fn on_close(&self, id: Id, ctx: Context<'_, Registry>) {
-        self.__inner.on_close(id, ctx);
+        self.inner_layer.on_close(id, ctx);
     }
 
     fn on_enter(&self, id: &span::Id, ctx: Context<'_, Registry>) {
-        self.__inner.on_enter(id, ctx);
+        self.inner_layer.on_enter(id, ctx);
     }
 
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, Registry>) {
-        self.__inner.on_event(event, ctx);
+        self.inner_layer.on_event(event, ctx);
     }
 
     fn on_exit(&self, id: &span::Id, ctx: Context<'_, Registry>) {
-        self.__inner.on_exit(id, ctx);
+        self.inner_layer.on_exit(id, ctx);
     }
 
     fn on_id_change(&self, old: &span::Id, new: &span::Id, ctx: Context<'_, Registry>) {
-        self.__inner.on_id_change(old, new, ctx);
+        self.inner_layer.on_id_change(old, new, ctx);
     }
 
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, Registry>) {
-        self.__inner.on_new_span(attrs, id, ctx);
+        self.inner_layer.on_new_span(attrs, id, ctx);
     }
 
     fn on_follows_from(&self, span: &span::Id, follows: &span::Id, ctx: Context<'_, Registry>) {
-        self.__inner.on_follows_from(span, follows, ctx);
+        self.inner_layer.on_follows_from(span, follows, ctx);
     }
 
     fn on_record(&self, span: &Id, values: &Record<'_>, ctx: Context<'_, Registry>) {
-        self.__inner.on_record(span, values, ctx);
+        self.inner_layer.on_record(span, values, ctx);
     }
 }
 
