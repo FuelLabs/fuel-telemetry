@@ -38,7 +38,7 @@ use nix::{
     },
 };
 use std::{
-    env::{var, var_os},
+    env::{current_exe, var, var_os},
     fs::{create_dir_all, File, OpenOptions},
     io::{stderr, stdout, Write},
     os::fd::{AsRawFd, OwnedFd},
@@ -281,6 +281,22 @@ macro_rules! trace_telemetry {
     }}
 }
 
+/// Helper function to get the current process' binary filename
+pub fn get_process_name() -> String {
+    let mut exe_name = String::from("unknown");
+
+    if let Ok(exe) = current_exe() {
+        if let Some(name) = exe.file_name() {
+            if let Some(name_str) = name.to_str() {
+                exe_name = name_str.to_string().replace(':', "_");
+            }
+        }
+    }
+
+    exe_name
+}
+
+/// Enforce a singleton by taking an advisory lock on a file
 /// Enforce a singleton by taking an advisory lock on a file
 ///
 /// This function takes an advisory lock on a file, and if another process has
