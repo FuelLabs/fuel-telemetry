@@ -37,7 +37,8 @@ const PROCESS_NAME: &str = "telemetry-file-watcher";
 const INFLUXDB_ORG: &str = "Dev%20Team";
 const INFLUXDB_BUCKET: &str = "telemetry";
 const INFLUXDB_URL: &str = "https://us-east-1-1.aws.cloud2.influxdata.com";
-const INFLUXDB_TOKEN: &str = "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag==";
+const INFLUXDB_TOKEN: &str =
+    "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag==";
 
 /// Configuration for `FileWatcher`
 #[derive(Debug, Clone)]
@@ -67,20 +68,19 @@ fn config() -> Result<&'static FileWatcherConfig> {
         // Format the InfluxDB URL (the org name needs to be URL-encoded)
         let influxdb_url = format!(
             "{}/api/v2/write?org={}&bucket={}&precision=ns",
-            get_env(
-                "INFLUXDB_URL",
-                INFLUXDB_URL
-            ),
+            get_env("INFLUXDB_URL", INFLUXDB_URL),
             get_env("INFLUXDB_ORG", INFLUXDB_ORG),
             get_env("INFLUXDB_BUCKET", INFLUXDB_BUCKET),
         );
 
         Ok(FileWatcherConfig {
-            lockfile: Path::new(&telemetry_config()?.fuelup_tmp).join(format!("{}.lock", PROCESS_NAME)),
-            logfile: Path::new(&telemetry_config()?.fuelup_log).join(format!("{}.log", PROCESS_NAME)),
             poll_interval: Duration::from_secs(poll_interval),
             influxdb_token: get_env("INFLUXDB_TOKEN", INFLUXDB_TOKEN),
             influxdb_url,
+            lockfile: Path::new(&telemetry_config()?.fuelup_tmp)
+                .join(format!("{}.lock", PROCESS_NAME)),
+            logfile: Path::new(&telemetry_config()?.fuelup_log)
+                .join(format!("{}.log", PROCESS_NAME)),
         })
     });
 
@@ -562,7 +562,7 @@ mod config {
             );
             assert_eq!(config.poll_interval, Duration::from_secs(3600));
             assert_eq!(config.influxdb_token, INFLUXDB_TOKEN);
-            
+
             assert_eq!(config.influxdb_url, format!(
                 "{}/api/v2/write?org={}&bucket={}&precision=ns",
                 INFLUXDB_URL,
