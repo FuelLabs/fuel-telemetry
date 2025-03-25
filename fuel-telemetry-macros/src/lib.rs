@@ -43,20 +43,32 @@ fn set_env_vars() -> proc_macro2::TokenStream {
 // telemetry should not impede the program from running.
 fn start_watchers() -> proc_macro2::TokenStream {
     quote! {
-        // Start the `FileWatcher` and only care about fatal errors
+        // In the following, we need to log all errors but as there is no
+        // `tracing` `Subscriber` running yet, we need to fall back to appending
+        // plain text to the log file instead
+        //
+        // Another thing to note is that as this is the original process, we
+        // only exit on `Fatal` errors, meaning that we have since forked and
+        // have become a child process so can safely fatally exit
+
+        // Start the `FileWatcher`
         let mut file_watcher = fuel_telemetry::file_watcher::FileWatcher::new();
-        if let Err(fuel_telemetry::errors::WatcherError::Fatal(err)) = file_watcher.start() {
-            // We need to ignore any errors that happen when trying to log this error.
-            let _ = file_watcher.log_error(&format!("Failed to start `FileWatcher`: {}", err));
-            std::process::exit(1);
+        if let Err(err) = file_watcher.start() {
+            let _ = fuel_telemetry::file_watcher::FileWatcher::log_error(&format!("Failed to start `FileWatcher`: {:?}", err));
+
+            if err.is_fatal() {
+                std::process::exit(1);
+            }
         }
 
-        // Start the `SystemInfoWatcher` and only care about fatal errors
+        // Start the `SystemInfoWatcher`
         let mut systeminfo_watcher = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new();
-        if let Err(fuel_telemetry::errors::WatcherError::Fatal(err)) = systeminfo_watcher.start() {
-            // We need to ignore any errors that happen when trying to log this error.
-            let _ = systeminfo_watcher.log_error(&format!("Failed to start `SystemInfoWatcher`: {}", err));
-            std::process::exit(1);
+        if let Err(err) = systeminfo_watcher.start() {
+            let _ = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::log_error(&format!("Failed to start `SystemInfoWatcher`: {:?}", err));
+
+            if err.is_fatal() {
+                std::process::exit(1);
+            }
         }
     }
 }

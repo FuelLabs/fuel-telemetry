@@ -112,6 +112,12 @@ pub enum WatcherError {
     Fatal(TelemetryError),
 }
 
+impl WatcherError {
+    pub fn is_fatal(&self) -> bool {
+        matches!(self, WatcherError::Fatal(_))
+    }
+}
+
 impl From<TelemetryError> for WatcherError {
     fn from(err: TelemetryError) -> Self {
         // Default to fatal, then be explicit about recoverable errors

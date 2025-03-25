@@ -293,7 +293,7 @@ impl FileWatcher {
 
     /// Last resort logging of errors, only to be used by the caller when there
     /// is no other way to report an error.
-    pub fn log_error(&self, message: &str) -> Result<()> {
+    pub fn log_error(message: &str) -> Result<()> {
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
