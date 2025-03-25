@@ -45,13 +45,17 @@ fn start_watchers() -> proc_macro2::TokenStream {
     quote! {
         // Start the `FileWatcher` and only care about fatal errors
         let mut file_watcher = fuel_telemetry::file_watcher::FileWatcher::new();
-        if let Err(fuel_telemetry::errors::WatcherError::Fatal(_)) = file_watcher.start() {
+        if let Err(fuel_telemetry::errors::WatcherError::Fatal(err)) = file_watcher.start() {
+            // We need to ignore any errors that happen when trying to log this error.
+            let _ = file_watcher.log_error(&format!("Failed to start `FileWatcher`: {}", err));
             std::process::exit(1);
         }
 
         // Start the `SystemInfoWatcher` and only care about fatal errors
         let mut systeminfo_watcher = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new();
-        if let Err(fuel_telemetry::errors::WatcherError::Fatal(_)) = systeminfo_watcher.start() {
+        if let Err(fuel_telemetry::errors::WatcherError::Fatal(err)) = systeminfo_watcher.start() {
+            // We need to ignore any errors that happen when trying to log this error.
+            let _ = systeminfo_watcher.log_error(&format!("Failed to start `SystemInfoWatcher`: {}", err));
             std::process::exit(1);
         }
     }

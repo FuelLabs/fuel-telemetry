@@ -16,6 +16,7 @@ use nix::{
 use std::{
     env::{set_var, var},
     fs::{File, OpenOptions},
+    io::Write,
     os::fd::{AsRawFd, RawFd},
     path::{Path, PathBuf},
     process::exit,
@@ -253,6 +254,17 @@ impl SystemInfoWatcher {
         helpers.sync_all(&touchfile_lock)?;
 
         Ok(())
+    }
+
+    /// Last resort logging of errors, only to be used by the caller when there
+    /// is no other way to report an error.
+    pub fn log_error(&self, message: &str) -> Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&config()?.logfile)?;
+
+        Ok(writeln!(file, "{}", message)?)
     }
 }
 

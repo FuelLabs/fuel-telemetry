@@ -18,7 +18,7 @@ use std::{
     collections::HashMap,
     env::var,
     fs::{read_dir, remove_file, File, OpenOptions},
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::exit,
     sync::{
@@ -289,6 +289,17 @@ impl FileWatcher {
         // regardless of age so that we keep going until there's no more work to
         // be done
         Ok(helpers.find_telemetry_files(true)?.is_empty())
+    }
+
+    /// Last resort logging of errors, only to be used by the caller when there
+    /// is no other way to report an error.
+    pub fn log_error(&self, message: &str) -> Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&config()?.logfile)?;
+
+        Ok(writeln!(file, "{}", message)?)
     }
 }
 
