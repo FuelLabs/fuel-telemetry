@@ -228,13 +228,13 @@ impl FileWatcher {
     pub fn kill() -> Result<bool> {
         let pid = PID.load(Ordering::Relaxed);
 
-        if pid > 0 {
-            kill(Pid::from_raw(pid), SIGKILL)?;
-            PID.store(0, Ordering::Relaxed);
-            return Ok(true);
+        if pid == 0 {
+            return Ok(false);
         }
 
-        Ok(false)
+        kill(Pid::from_raw(pid), SIGKILL)?;
+        PID.store(0, Ordering::Relaxed);
+        Ok(true)
     }
 
     /// Poll for aged-out telemetry files
