@@ -47,6 +47,13 @@ use std::{
     sync::LazyLock,
 };
 
+// We need to close all file descriptors in `daemonise()`, but need to skip the
+// first three (0 = STDIN, 1 = STDOUT, 2 = STDERR) as we deal with stdio later
+const FIRST_NON_STDIO_FD: i32 = 3;
+
+// The lowest maximum file descriptor across Legacy Linux and MacOS
+const MIN_OPEN_MAX: i32 = 1024;
+
 // Result type for the crate
 pub type Result<T> = std::result::Result<T, TelemetryError>;
 
@@ -409,15 +416,14 @@ fn daemonise_with_helpers(
     // We close all file descriptors since any currently opened were inherited
     // from the parent process which we don't care about. Not doing so leaks
     // open file descriptors which could lead to exhaustion.
-
-    // Skip the first three because we deal with stdio later. Here, 1024 is a
-    // safe value i.e MIN(Legacy Linux, MacOS)
+    //
+    // Here, 1024 is a safe value i.e MIN(Legacy Linux, MacOS)
     let max_fd = helpers
         .sysconf(SysconfVar::OPEN_MAX)
         .map_err(into_fatal)?
-        .unwrap_or(1024) as i32;
+        .unwrap_or(MIN_OPEN_MAX.into()) as i32;
 
-    for fd in 3..=max_fd {
+    for fd in FIRST_NON_STDIO_FD..=max_fd {
         match helpers.close(fd) {
             Ok(()) | Err(Errno::EBADF) => {}
             Err(e) => Err(into_fatal(e))?,
