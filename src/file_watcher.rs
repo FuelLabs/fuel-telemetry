@@ -670,13 +670,16 @@ mod config {
 #[cfg(test)]
 mod new {
     use super::*;
+    use rusty_fork::rusty_fork_test;
 
-    #[test]
-    fn new() {
-        let file_watcher = FileWatcher::new();
+    rusty_fork_test! {
+        #[test]
+        fn new() {
+            let file_watcher = FileWatcher::new();
 
-        assert!(file_watcher.client.is_none());
-        assert!(file_watcher.request.is_none());
+            assert!(file_watcher.client.is_none());
+            assert!(file_watcher.request.is_none());
+        }
     }
 }
 
