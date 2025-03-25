@@ -12,11 +12,11 @@ name = "fuel_telemetry"
 path = "src/lib.rs"
 
 [workspace]
-members = ["macros"]
-default-members = [".", "macros"]
+members = ["fuel-telemetry-macros"]
+default-members = [".", "fuel-telemetry-macros"]
 
 [dependencies]
-macros = { path = "./macros" }
+fuel-telemetry-macros = { path = "./fuel-telemetry-macros" }
 
 base64 = "0.22"
 chrono = "0.4"

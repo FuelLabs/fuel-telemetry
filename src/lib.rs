@@ -5,7 +5,7 @@ pub mod telemetry_formatter;
 pub mod telemetry_layer;
 
 pub use errors::{into_fatal, into_recoverable, TelemetryError, WatcherError};
-pub use macros::{new, new_with_watchers, new_with_watchers_and_init};
+pub use fuel_telemetry_macros::{new, new_with_watchers, new_with_watchers_and_init};
 pub use telemetry_formatter::TelemetryFormatter;
 pub use telemetry_layer::TelemetryLayer;
 pub use tracing::{debug, error, event, info, span, trace, warn, Level};

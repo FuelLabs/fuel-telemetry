@@ -1,5 +1,5 @@
 [package]
-name = "macros"
+name = "fuel-telemetry-macros"
 edition = "2021"
 
 [lib]
