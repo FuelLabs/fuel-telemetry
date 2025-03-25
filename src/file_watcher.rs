@@ -15,7 +15,6 @@ use regex::{Captures, Regex};
 use reqwest::blocking::{Client, Request, RequestBuilder};
 use std::fs::ReadDir;
 use std::{
-    clone::Clone,
     collections::HashMap,
     env::var,
     fs::{read_dir, remove_file, File, OpenOptions},
