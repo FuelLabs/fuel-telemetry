@@ -90,35 +90,21 @@ impl std::fmt::Debug for TelemetryError {
 // `Clone`.
 //
 
-impl From<io::Error> for TelemetryError {
-    fn from(err: io::Error) -> Self {
-        Self::IO(err.to_string())
-    }
+macro_rules! impl_error_from {
+    ($from:ty, $variant:ident) => {
+        impl From<$from> for TelemetryError {
+            fn from(err: $from) -> Self {
+                Self::$variant(err.to_string())
+            }
+        }
+    };
 }
 
-impl From<nix::Error> for TelemetryError {
-    fn from(err: nix::Error) -> Self {
-        Self::Nix(err.to_string())
-    }
-}
-
-impl From<std::num::ParseIntError> for TelemetryError {
-    fn from(err: std::num::ParseIntError) -> Self {
-        Self::Parse(err.to_string())
-    }
-}
-
-impl From<reqwest::Error> for TelemetryError {
-    fn from(err: reqwest::Error) -> Self {
-        Self::Reqwest(err.to_string())
-    }
-}
-
-impl From<FromUtf8Error> for TelemetryError {
-    fn from(err: FromUtf8Error) -> Self {
-        Self::Utf8(err.to_string())
-    }
-}
+impl_error_from!(io::Error, IO);
+impl_error_from!(nix::Error, Nix);
+impl_error_from!(std::num::ParseIntError, Parse);
+impl_error_from!(reqwest::Error, Reqwest);
+impl_error_from!(FromUtf8Error, Utf8);
 
 #[derive(Debug, PartialEq)]
 pub enum WatcherError {
