@@ -49,12 +49,6 @@ fn start_watchers() -> proc_macro2::TokenStream {
             std::process::exit(1);
         }
 
-        // Start the `ProcessWatcher` and only care about fatal errors
-        let mut process_watcher = fuel_telemetry::process_watcher::ProcessWatcher::new();
-        if let Err(fuel_telemetry::errors::WatcherError::Fatal(_)) = process_watcher.start() {
-            std::process::exit(1);
-        }
-
         // Start the `SystemInfoWatcher` and only care about fatal errors
         let mut systeminfo_watcher = fuel_telemetry::systeminfo_watcher::SystemInfoWatcher::new();
         if let Err(fuel_telemetry::errors::WatcherError::Fatal(_)) = systeminfo_watcher.start() {
