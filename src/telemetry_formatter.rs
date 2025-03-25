@@ -54,27 +54,28 @@ impl TelemetryFormatter {
     ///     .event_format(telemetry_formatter);
     /// ```
     pub fn new() -> Self {
+        let arch = match std::env::consts::ARCH {
+            arch @ ("aarch64" | "x86_64") => arch,
+            _ => "unknown",
+        };
+
+        let vendor = match std::env::consts::OS {
+            "macos" => "apple",
+            _ => "unknown",
+        };
+
+        let os = match std::env::consts::OS {
+            "macos" => "darwin",
+            "linux" => "linux-gnu",
+            _ => "unknown",
+        };
+
         // Cache the values we'll use for every event
         Self {
             os: System::name().unwrap_or("unknown".to_string()),
             os_version: System::kernel_version().unwrap_or("unknown".to_string()),
             trace_id: Uuid::new_v4().to_string(),
-            triple: format!(
-                "{}-{}-{}",
-                match std::env::consts::ARCH {
-                    arch @ ("aarch64" | "x86_64") => arch,
-                    _ => "unknown",
-                },
-                match std::env::consts::OS {
-                    "macos" => "apple",
-                    _ => "unknown",
-                },
-                match std::env::consts::OS {
-                    "macos" => "darwin",
-                    "linux" => "linux-gnu",
-                    _ => "unknown",
-                }
-            ),
+            triple: format!("{arch}-{vendor}-{os}"),
         }
     }
 }
