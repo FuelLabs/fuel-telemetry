@@ -41,6 +41,23 @@ fn start_watchers() -> proc_macro2::TokenStream {
         // only exit on `Fatal` errors, meaning that we have since forked and
         // have become a child process so can safely fatally exit
 
+        // Start the `ProcessWatcher`
+        match fuel_telemetry::process_watcher::ProcessWatcher::new() {
+            Ok(mut process_watcher) => {
+                if let Err(err) = process_watcher.start() {
+                    let _ = fuel_telemetry::process_watcher::ProcessWatcher::log_error(&format!("Failed to start `ProcessWatcher`: {:?}", err));
+
+                    if err.is_fatal() {
+                        std::process::exit(1);
+                    }
+                }
+            }
+            Err(err) => {
+                let _ = fuel_telemetry::process_watcher::ProcessWatcher::log_error(&format!("Failed to create `ProcessWatcher`: {:?}", err));
+                // Don't exit as this is the original process and we need to continue
+            }
+        }
+
         // Start the `FileWatcher`
         let mut file_watcher = fuel_telemetry::file_watcher::FileWatcher::new();
         if let Err(err) = file_watcher.start() {

@@ -1,5 +1,6 @@
 pub mod errors;
 pub mod file_watcher;
+pub mod process_watcher;
 pub mod systeminfo_watcher;
 pub mod telemetry_formatter;
 pub mod telemetry_layer;
@@ -296,7 +297,6 @@ pub fn get_process_name() -> String {
     exe_name
 }
 
-/// Enforce a singleton by taking an advisory lock on a file
 /// Enforce a singleton by taking an advisory lock on a file
 ///
 /// This function takes an advisory lock on a file, and if another process has

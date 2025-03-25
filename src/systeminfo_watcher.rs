@@ -194,8 +194,8 @@ impl SystemInfoWatcher {
         // CPU metrics
         //
 
-        // Need to refresh twice with a delay in between so that there ar enough
-        // data points for "cpu_usage"
+        // Need to refresh twice with delay in between so that there are enough
+        // data points for "cpu_usage". See `sysinfo` docs for more details.
         sysinfo.refresh_cpu_usage();
         std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
         sysinfo.refresh_cpu_usage();
