@@ -66,11 +66,12 @@ fn config() -> Result<&'static FileWatcherConfig> {
         let poll_interval = get_env("FILEWATCHER_POLL_INTERVAL", "3600").parse()?;
 
         // Format the InfluxDB URL (the org name needs to be URL-encoded)
+        let base_url = get_env("INFLUXDB_URL", INFLUXDB_URL);
+        let org = get_env("INFLUXDB_ORG", INFLUXDB_ORG);
+        let bucket = get_env("INFLUXDB_BUCKET", INFLUXDB_BUCKET);
         let influxdb_url = format!(
             "{}/api/v2/write?org={}&bucket={}&precision=ns",
-            get_env("INFLUXDB_URL", INFLUXDB_URL),
-            get_env("INFLUXDB_ORG", INFLUXDB_ORG),
-            get_env("INFLUXDB_BUCKET", INFLUXDB_BUCKET),
+            base_url, org, bucket
         );
 
         Ok(FileWatcherConfig {
