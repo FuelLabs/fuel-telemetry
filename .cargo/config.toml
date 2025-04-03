@@ -1,0 +1,4 @@
+[env]
+# Since a lot of the code in this crate starts singleton processes or sets
+# singleton data, we need to unsure tests run in series.
+RUST_TEST_THREADS = "1"
