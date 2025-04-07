@@ -2,20 +2,163 @@ name: CI
 
 on:
   push:
+    branches:
+      - master
   pull_request:
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUST_VERSION: 1.86.0
+  NIGHTLY_RUST_VERSION: nightly-2025-03-25
 
 jobs:
-  test:
-    name: cargo test
+  cancel-previous-runs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
+
+  publish-codecov:
+    name: Check code coverage (branch)
+    runs-on: ubuntu-latest
+    permissions: # Write access to push changes to pages
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install latest Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.NIGHTLY_RUST_VERSION }}
+
+      - name: Install cargo-llvm-codecov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Code coverage report
+        run: cargo +${{ env.NIGHTLY_RUST_VERSION }} llvm-cov --all-features --lcov --branch --output-path lcov.info
+
+      - name: Setup LCOV
+        uses: hrishikesh-kadam/setup-lcov@v1
+
+      - name: Report code coverage
+        uses: zgosalvez/github-actions-report-lcov@v4
+        with:
+          coverage-files: lcov.info
+          minimum-coverage: 0 # for now we are not enforcing any minimum coverage.
+          artifact-name: code-coverage-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          update-comment: true
+
+  lint-toml-files:
+    needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Install Cargo.toml linter
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-toml-lint
+          version: "0.1"
+      - name: Run Cargo.toml linter
+        run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
+      - name: Notify if Job Fails
+        uses: ravsamhq/notify-slack-action@v1
+        if: always() && github.ref == 'refs/heads/master'
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: '{workflow} has {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+          footer: ''
+          notify_when: 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+
+  cargo-verifications:
+    needs: cancel-previous-runs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - command: fmt
+            args: --all --verbose -- --check
+          - command: clippy
+            args: --all-targets --all-features
+          - command: check
+            args: --all-targets --all-features
+          - command: test
+            args: --all-targets --all-features
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
           components: clippy, rustfmt
-      - name: Cargo Format
-        run: cargo fmt --all --check
-      - name: Cargo Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - name: Cargo Test
-        run: cargo test --workspace --all-targets --all-features
+      - uses: Swatinem/rust-cache@v1
+        with:
+          key: "${{ matrix.command }}${{ matrix.args }}"
+      - name: ${{ matrix.command }} ${{ matrix.args }}
+        run: cargo ${{ matrix.command }} ${{ matrix.args }}
+      - name: Notify if Job Fails
+        uses: ravsamhq/notify-slack-action@v1
+        if: always() && github.ref == 'refs/heads/master'
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: '{workflow} has {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+          footer: ''
+          notify_when: 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
+
+  publish-crates:
+    needs:
+      - lint-toml-files
+      - cargo-verifications
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Verify tag version
+        run: |
+          curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
+          mv ./dasel /usr/local/bin/dasel
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} Cargo.toml
+
+      - name: Publish crate
+        uses: FuelLabs/publish-crates@v1
+        with:
+          publish-delay: 30000
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Notify if Job Fails
+        uses: ravsamhq/notify-slack-action@v1
+        if: always()
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: '{workflow} has {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+          footer: ''
+          notify_when: 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_TOOLING }}
