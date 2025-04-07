@@ -102,6 +102,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v1
         with:
           key: "${{ matrix.command }}${{ matrix.args }}"
