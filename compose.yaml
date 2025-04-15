@@ -1,0 +1,43 @@
+version: '2.34'
+
+services:
+  influxdb2:
+    image: influxdb:2
+    ports:
+      - "8086:8086"
+    environment:
+      # --- InfluxDB Initialization Configuration ---
+      DOCKER_INFLUXDB_INIT_MODE: setup
+
+      # Point to the secret files mounted by Docker
+      DOCKER_INFLUXDB_INIT_USERNAME_FILE: /run/secrets/influxdb2_admin_username
+      DOCKER_INFLUXDB_INIT_PASSWORD_FILE: /run/secrets/influxdb2_admin_password
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN_FILE: /run/secrets/influxdb2_admin_token
+
+      # Organization and Bucket configuration (remains the same)
+      DOCKER_INFLUXDB_INIT_ORG: docs
+      DOCKER_INFLUXDB_INIT_BUCKET: home
+    secrets:
+      # Reference the top-level secrets
+      - influxdb2_admin_username
+      - influxdb2_admin_password
+      - influxdb2_admin_token
+    volumes:
+      - type: volume
+        source: influxdb2-data
+        target: /var/lib/influxdb2
+      - type: volume
+        source: influxdb2-config
+        target: /etc/influxdb2
+
+secrets:
+  influxdb2_admin_username:
+    environment: INFLUXDB_ADMIN_USERNAME
+  influxdb2_admin_password:
+    environment: INFLUXDB_ADMIN_PASSWORD
+  influxdb2_admin_token:
+    environment: INFLUXDB_ADMIN_TOKEN
+
+volumes:
+  influxdb2-data:
+  influxdb2-config:

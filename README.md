@@ -194,15 +194,26 @@ for f in ~/.fuelup/tmp/*.telemetry.*; do mv "$f" "$f.old"; done
 touch -t 202501010101 ~/.fuelup/tmp/*
 ```
 
-### Overriding InfluxDB's Endpoint
+### Running Locally 
 
-Use the `INFLUXDB_URL` environment variable to point to a different InfluxDB
-endpoint. This can be combined with running a local InfluxDB container:
+InfluxDB container needs the following environment variables for setup:
+
+- `INFLUXDB_ADMIN_USERNAME`
+- `INFLUXDB_ADMIN_PASSWORD`
+- `INFLUXDB_ADMIN_TOKEN`
+
+For running the InfluxDB locally, simply set the above environment variables and run:
 
 ```sh
 docker compose up influxdb2
-export INFLUXDB_URL=http://localhost:8086
 ```
+
+See InfluxDB's documentation for [Using Docker
+Compose](https://docs.influxdata.com/influxdb/v2/install/use-docker-compose/)
+for more info on getting InfluxDB running locally.
+
+Use the `INFLUXDB_URL` environment variable to point to a different InfluxDB
+endpoint. This can be combined with running a local InfluxDB container:
 
 The InfluxDB connection settings can be further configured using the following
 environment variables:
@@ -211,9 +222,12 @@ environment variables:
 - `INFLUXDB_ORG`
 - `INFLUXDB_BUCKET`
 
-See InfluxDB's documentation for [Using Docker
-Compose](https://docs.influxdata.com/influxdb/v2/install/use-docker-compose/)
-for more info on getting InfluxDB running locally.
+Example:
+
+```sh
+docker compose up influxdb2
+export INFLUXDB_URL=http://localhost:8086
+```
 
 ### Architectural Design
 
