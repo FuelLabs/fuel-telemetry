@@ -70,11 +70,15 @@ impl TelemetryFormatter {
             _ => "unknown",
         };
 
+        // This is already set by the macro that initialize watchers, so we
+        // should be getting something from env variable.
+        let trace_id = var("TRACE_ID").unwrap_or_else(|_| Uuid::new_v4().to_string());
+
         // Cache the values we'll use for every event
         Self {
             os: System::name().unwrap_or("unknown".to_string()),
             os_version: System::kernel_version().unwrap_or("unknown".to_string()),
-            trace_id: Uuid::new_v4().to_string(),
+            trace_id,
             triple: format!("{arch}-{vendor}-{os}"),
         }
     }

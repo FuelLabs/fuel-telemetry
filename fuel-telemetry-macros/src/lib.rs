@@ -41,6 +41,10 @@ fn start_watchers() -> proc_macro2::TokenStream {
         // only exit on `Fatal` errors, meaning that we have since forked and
         // have become a child process so can safely fatally exit
 
+        // Set global `TRACE_ID` for all watchers (`ProcessWatcher`,
+        // `FileWatcher` and `SytemInfoWatcher`).
+        fuel_telemetry::telemetry_layer::set_trace_id_env_to_new_uuid();
+
         // Start the `ProcessWatcher`
         match fuel_telemetry::process_watcher::ProcessWatcher::new() {
             Ok(mut process_watcher) => {
