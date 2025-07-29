@@ -1,17 +1,16 @@
 use crate::{
-    self as fuel_telemetry, daemonise, enforce_singleton, info, into_recoverable, span,
-    telemetry_config, telemetry_formatter, EnvSetting, Level, Result, TelemetryError,
-    WatcherResult,
+    self as fuel_telemetry, EnvSetting, Level, Result, TelemetryError, WatcherResult, daemonise,
+    enforce_singleton, info, into_recoverable, span, telemetry_config, telemetry_formatter,
 };
 
 use nix::{
     fcntl::{Flock, FlockArg},
     sys::{
-        signal::{kill, Signal::SIGKILL},
+        signal::{Signal::SIGKILL, kill},
         stat::fstat,
     },
     time::ClockId,
-    unistd::{getpid, Pid},
+    unistd::{Pid, getpid},
 };
 use std::{
     env::{set_var, var},
@@ -21,8 +20,8 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        atomic::{AtomicBool, AtomicI32, Ordering},
         LazyLock,
+        atomic::{AtomicBool, AtomicI32, Ordering},
     },
     time::Duration,
 };
@@ -139,7 +138,9 @@ impl SystemInfoWatcher {
         //
         // Also, we need to set the bucket name as the SystemInfoWatcher is
         // system-wide rather than being crate/process specific
-        set_var("TELEMETRY_PKG_NAME", TELEMETRY_PKG_NAME);
+        unsafe {
+            set_var("TELEMETRY_PKG_NAME", TELEMETRY_PKG_NAME);
+        }
         let (telemetry_layer, _guard) = helpers.new_fuel_telemetry()?;
         tracing_subscriber::registry().with(telemetry_layer).init();
 
@@ -289,7 +290,7 @@ trait StartHelpers {
         >,
         tracing_appender::non_blocking::WorkerGuard,
     )> {
-        fuel_telemetry::new!()
+        unsafe { fuel_telemetry::new!() }
     }
 
     fn enforce_singleton(&self, lockfile_path: &Path) -> Result<Flock<File>> {
@@ -580,7 +581,7 @@ mod config {
 #[cfg(test)]
 mod start {
     use super::*;
-    use crate::{into_recoverable, setup_fuelup_home, WatcherError};
+    use crate::{WatcherError, into_recoverable, setup_fuelup_home};
     use nix::sys::signal::kill;
     use rusty_fork::rusty_fork_test;
     use std::{fs::File, thread::sleep, time::Duration};
@@ -791,9 +792,9 @@ mod kill {
     use nix::{
         sys::{
             signal::Signal,
-            wait::{waitpid, WaitPidFlag, WaitStatus},
+            wait::{WaitPidFlag, WaitStatus, waitpid},
         },
-        unistd::{fork, ForkResult},
+        unistd::{ForkResult, fork},
     };
     use rusty_fork::rusty_fork_test;
     use std::thread::sleep;
@@ -845,7 +846,7 @@ mod kill {
 mod poll_systeminfo {
     use super::*;
     use crate::setup_fuelup_home;
-    use base64::{engine::general_purpose::STANDARD, Engine};
+    use base64::{Engine, engine::general_purpose::STANDARD};
     use rusty_fork::rusty_fork_test;
     use std::{
         io::{BufRead, BufReader},

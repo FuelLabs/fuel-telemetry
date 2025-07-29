@@ -1,17 +1,17 @@
 use std::{env::var, io::Write, path::PathBuf};
 use tracing::{
-    span::{self, Id, Record},
     Event,
+    span::{self, Id, Record},
 };
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::{
-    fmt::{format::DefaultFields, Layer},
-    layer::Context,
     Layer as LayerTrait, Registry,
+    fmt::{Layer, format::DefaultFields},
+    layer::Context,
 };
 
 use crate::{
-    errors::TelemetryError, telemetry_config, telemetry_formatter::TelemetryFormatter, Result,
+    Result, errors::TelemetryError, telemetry_config, telemetry_formatter::TelemetryFormatter,
 };
 
 /// A `tracing` `Layer` to generate telemetry to be later consumed into InfluxDB
@@ -76,7 +76,9 @@ impl TelemetryLayer {
 /// Sets `TRACE_ID` env variable to a new UUID.
 pub fn set_trace_id_env_to_new_uuid() {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    std::env::set_var("TRACE_ID", trace_id);
+    unsafe {
+        std::env::set_var("TRACE_ID", trace_id);
+    }
 }
 
 trait NewHelpers {

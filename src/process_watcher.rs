@@ -1,12 +1,11 @@
 use crate::{
-    self as fuel_telemetry, daemonise,
-    errors::{into_recoverable, TelemetryError},
+    self as fuel_telemetry, EnvSetting, Result, WatcherResult, daemonise,
+    errors::{TelemetryError, into_recoverable},
     get_process_name, info_telemetry, span_telemetry, telemetry_config, telemetry_formatter,
-    EnvSetting, Result, WatcherResult,
 };
 use nix::{
     sys::signal::kill,
-    unistd::{getpid, Pid as NixPid},
+    unistd::{Pid as NixPid, getpid},
 };
 use std::{
     env::{set_var, var},
@@ -15,8 +14,8 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        atomic::{AtomicBool, AtomicI32, Ordering},
         LazyLock,
+        atomic::{AtomicBool, AtomicI32, Ordering},
     },
     thread::sleep,
     time::{Duration, Instant},
@@ -158,7 +157,9 @@ impl ProcessWatcher {
             }
         }
 
-        set_var("TELEMETRY_PKG_NAME", TELEMETRY_PKG_NAME);
+        unsafe {
+            set_var("TELEMETRY_PKG_NAME", TELEMETRY_PKG_NAME);
+        }
         let (telemetry_layer, _guard) = helpers.new_fuel_telemetry()?;
         tracing_subscriber::registry().with(telemetry_layer).init();
 
@@ -217,7 +218,7 @@ trait StartHelpers {
         >,
         tracing_appender::non_blocking::WorkerGuard,
     )> {
-        fuel_telemetry::new!()
+        unsafe { fuel_telemetry::new!() }
     }
 
     fn measure_process(&self, process_watcher: &mut ProcessWatcher) {
@@ -499,16 +500,16 @@ mod new {
 #[cfg(test)]
 mod start {
     use super::*;
-    use crate::{errors::into_fatal, setup_fuelup_home, WatcherError};
+    use crate::{WatcherError, errors::into_fatal, setup_fuelup_home};
     use nix::{
-        sys::wait::{waitpid, WaitStatus},
-        unistd::{dup2, fork, pipe, ForkResult},
+        sys::wait::{WaitStatus, waitpid},
+        unistd::{ForkResult, dup2, fork, pipe},
     };
     use rusty_fork::rusty_fork_test;
     use std::{
         env::set_var,
         fs::File,
-        io::{stdout, Read, Write},
+        io::{Read, Write, stdout},
         os::fd::{AsRawFd, FromRawFd, IntoRawFd},
         sync::Arc,
     };
@@ -845,10 +846,10 @@ mod measure_process {
     use crate::setup_fuelup_home;
     use nix::{
         sys::{
-            signal::{kill, Signal},
-            wait::{waitpid, WaitPidFlag, WaitStatus},
+            signal::{Signal, kill},
+            wait::{WaitPidFlag, WaitStatus, waitpid},
         },
-        unistd::{fork, ForkResult},
+        unistd::{ForkResult, fork},
     };
     use rusty_fork::rusty_fork_test;
     use std::sync::Arc;
@@ -951,10 +952,10 @@ mod process_is_alive {
     use crate::setup_fuelup_home;
     use nix::{
         sys::{
-            signal::{kill, Signal},
-            wait::{waitpid, WaitPidFlag, WaitStatus},
+            signal::{Signal, kill},
+            wait::{WaitPidFlag, WaitStatus, waitpid},
         },
-        unistd::{fork, ForkResult},
+        unistd::{ForkResult, fork},
     };
     use rusty_fork::rusty_fork_test;
 
