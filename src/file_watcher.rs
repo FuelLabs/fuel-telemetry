@@ -571,7 +571,7 @@ mod config {
 
         #[test]
         fn poll_interval_set() {
-            set_var("FILEWATCHER_POLL_INTERVAL", "2222");
+            unsafe { set_var("FILEWATCHER_POLL_INTERVAL", "2222"); }
 
             let config = config().unwrap();
             assert_eq!(config.poll_interval, Duration::from_secs(2222));
@@ -579,7 +579,7 @@ mod config {
 
         #[test]
         fn poll_interval_invalid() {
-            set_var("FILEWATCHER_POLL_INTERVAL", "invalid");
+            unsafe { set_var("FILEWATCHER_POLL_INTERVAL", "invalid"); }
 
             let config = config();
             assert_eq!(
@@ -592,7 +592,7 @@ mod config {
 
         #[test]
         fn influxdb_url_set() {
-            set_var("INFLUXDB_URL", "http://localhost:8000");
+            unsafe { set_var("INFLUXDB_URL", "http://localhost:8000"); }
 
             let config = config().unwrap();
             assert_eq!(
@@ -606,7 +606,7 @@ mod config {
 
         #[test]
         fn influxdb_org_set() {
-            set_var("INFLUXDB_ORG", "org-name");
+            unsafe { set_var("INFLUXDB_ORG", "org-name"); }
 
             let config = config().unwrap();
             assert_eq!(config.influxdb_url, format!(
@@ -619,7 +619,7 @@ mod config {
 
         #[test]
         fn influxdb_bucket_set() {
-            set_var("INFLUXDB_BUCKET", "bucket-name");
+            unsafe { set_var("INFLUXDB_BUCKET", "bucket-name"); }
 
             let config = config().unwrap();
             assert_eq!(config.influxdb_url, format!(
@@ -635,10 +635,10 @@ mod config {
             setup_fuelup_home();
             let fuelup_home = var("FUELUP_HOME").unwrap();
 
-            set_var("FILEWATCHER_POLL_INTERVAL", "2222");
-            set_var("INFLUXDB_URL", "http://localhost:8000");
-            set_var("INFLUXDB_ORG", "org-name");
-            set_var("INFLUXDB_BUCKET", "bucket-name");
+            unsafe { set_var("FILEWATCHER_POLL_INTERVAL", "2222"); }
+            unsafe { set_var("INFLUXDB_URL", "http://localhost:8000"); }
+            unsafe { set_var("INFLUXDB_ORG", "org-name"); }
+            unsafe { set_var("INFLUXDB_BUCKET", "bucket-name"); }
 
             let config = config().unwrap();
 
@@ -700,7 +700,7 @@ mod start {
     rusty_fork_test! {
         #[test]
         fn opted_out_is_true() {
-            set_var("FUELUP_NO_TELEMETRY", "true");
+            unsafe { set_var("FUELUP_NO_TELEMETRY", "true"); }
 
             let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start();
@@ -716,7 +716,7 @@ mod start {
         #[test]
         fn opted_out_is_empty() {
             // Even though it's empty, we only care if it's set
-            set_var("FUELUP_NO_TELEMETRY", "");
+            unsafe { set_var("FUELUP_NO_TELEMETRY", ""); }
 
             let mut file_watcher = FileWatcher::new();
             let result = file_watcher.start();

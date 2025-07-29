@@ -156,9 +156,7 @@ impl ProcessWatcher {
             }
         }
 
-        unsafe {
-            set_var("TELEMETRY_PKG_NAME", TELEMETRY_PKG_NAME);
-        }
+        set_var("TELEMETRY_PKG_NAME", TELEMETRY_PKG_NAME);
         let (telemetry_layer, _guard) = helpers.new_fuel_telemetry()?;
         tracing_subscriber::registry().with(telemetry_layer).init();
 
@@ -217,7 +215,7 @@ trait StartHelpers {
         >,
         tracing_appender::non_blocking::WorkerGuard,
     )> {
-        unsafe { fuel_telemetry::new!() }
+        fuel_telemetry::new!()
     }
 
     fn measure_process(&self, process_watcher: &mut ProcessWatcher) {

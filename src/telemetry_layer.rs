@@ -76,9 +76,7 @@ impl TelemetryLayer {
 /// Sets `TRACE_ID` env variable to a new UUID.
 pub fn set_trace_id_env_to_new_uuid() {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    unsafe {
-        std::env::set_var("TRACE_ID", trace_id);
-    }
+    std::env::set_var("TRACE_ID", trace_id);
 }
 
 trait NewHelpers {
