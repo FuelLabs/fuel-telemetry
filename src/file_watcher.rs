@@ -69,19 +69,16 @@ fn config() -> Result<&'static FileWatcherConfig> {
         let base_url = get_env("INFLUXDB_URL", INFLUXDB_URL);
         let org = get_env("INFLUXDB_ORG", INFLUXDB_ORG);
         let bucket = get_env("INFLUXDB_BUCKET", INFLUXDB_BUCKET);
-        let influxdb_url = format!(
-            "{}/api/v2/write?org={}&bucket={}&precision=ns",
-            base_url, org, bucket
-        );
+        let influxdb_url =
+            format!("{base_url}/api/v2/write?org={org}&bucket={bucket}&precision=ns");
 
         Ok(FileWatcherConfig {
             poll_interval: Duration::from_secs(poll_interval),
             influxdb_token: get_env("INFLUXDB_TOKEN", INFLUXDB_TOKEN),
             influxdb_url,
             lockfile: Path::new(&telemetry_config()?.fuelup_tmp)
-                .join(format!("{}.lock", PROCESS_NAME)),
-            logfile: Path::new(&telemetry_config()?.fuelup_log)
-                .join(format!("{}.log", PROCESS_NAME)),
+                .join(format!("{PROCESS_NAME}.lock")),
+            logfile: Path::new(&telemetry_config()?.fuelup_log).join(format!("{PROCESS_NAME}.log")),
         })
     });
 
@@ -300,7 +297,7 @@ impl FileWatcher {
             .append(true)
             .open(&config()?.logfile)?;
 
-        Ok(writeln!(file, "{}", message)?)
+        Ok(writeln!(file, "{message}")?)
     }
 }
 
