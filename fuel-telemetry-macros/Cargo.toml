@@ -1,6 +1,7 @@
 [package]
 name = "fuel-telemetry-macros"
 edition = "2021"
+version = "0.1.0"
 
 [lib]
 proc-macro = true
