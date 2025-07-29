@@ -6,7 +6,7 @@ authors.workspace = true
 homepage.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "A Telemetry binary and library for Fuel (Rust and non-Rust) programs"
+description = "Procedural macros for fuel-telemetry"
 
 [lib]
 proc-macro = true
