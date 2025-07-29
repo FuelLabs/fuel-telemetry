@@ -1,15 +1,15 @@
 use crate::{
-    EnvSetting, Result, TelemetryError, WatcherResult, daemonise, enforce_singleton,
-    into_recoverable, telemetry_config,
+    daemonise, enforce_singleton, into_recoverable, telemetry_config, EnvSetting, Result,
+    TelemetryError, WatcherResult,
 };
 
-use base64::{DecodeError, Engine, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, DecodeError, Engine};
 use chrono::NaiveDateTime;
 use influxdb_line_protocol::LineProtocolBuilder;
 use nix::{
     fcntl::{Flock, FlockArg},
-    sys::signal::{Signal::SIGKILL, kill},
-    unistd::{Pid, getpid},
+    sys::signal::{kill, Signal::SIGKILL},
+    unistd::{getpid, Pid},
 };
 use regex::{Captures, Regex};
 use reqwest::blocking::{Client, Request, RequestBuilder};
@@ -17,13 +17,13 @@ use std::fs::ReadDir;
 use std::{
     collections::HashMap,
     env::var,
-    fs::{File, OpenOptions, read_dir, remove_file},
+    fs::{read_dir, remove_file, File, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        LazyLock,
         atomic::{AtomicBool, AtomicI32, Ordering},
+        LazyLock,
     },
     thread::sleep,
     time::Duration,
@@ -684,16 +684,16 @@ mod new {
 #[cfg(test)]
 mod start {
     use super::*;
-    use crate::{WatcherError, errors::into_fatal, setup_fuelup_home};
+    use crate::{errors::into_fatal, setup_fuelup_home, WatcherError};
     use nix::{
-        sys::wait::{WaitStatus, waitpid},
-        unistd::{ForkResult, dup2, fork, pipe},
+        sys::wait::{waitpid, WaitStatus},
+        unistd::{dup2, fork, pipe, ForkResult},
     };
     use rusty_fork::rusty_fork_test;
     use std::{
         env::set_var,
         fs::File,
-        io::{Read, Write, stdout},
+        io::{stdout, Read, Write},
         os::fd::{AsRawFd, FromRawFd, IntoRawFd},
     };
 
@@ -980,9 +980,9 @@ mod kill {
     use nix::{
         sys::{
             signal::Signal,
-            wait::{WaitPidFlag, WaitStatus, waitpid},
+            wait::{waitpid, WaitPidFlag, WaitStatus},
         },
-        unistd::{ForkResult, fork},
+        unistd::{fork, ForkResult},
     };
     use rusty_fork::rusty_fork_test;
     use std::thread::sleep;

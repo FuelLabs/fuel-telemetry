@@ -1,11 +1,12 @@
 use crate::{
-    self as fuel_telemetry, EnvSetting, Result, WatcherResult, daemonise,
-    errors::{TelemetryError, into_recoverable},
+    self as fuel_telemetry, daemonise,
+    errors::{into_recoverable, TelemetryError},
     get_process_name, info_telemetry, span_telemetry, telemetry_config, telemetry_formatter,
+    EnvSetting, Result, WatcherResult,
 };
 use nix::{
     sys::signal::kill,
-    unistd::{Pid as NixPid, getpid},
+    unistd::{getpid, Pid as NixPid},
 };
 use std::{
     env::{set_var, var},
@@ -14,8 +15,8 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        LazyLock,
         atomic::{AtomicBool, AtomicI32, Ordering},
+        LazyLock,
     },
     thread::sleep,
     time::{Duration, Instant},
@@ -497,16 +498,16 @@ mod new {
 #[cfg(test)]
 mod start {
     use super::*;
-    use crate::{WatcherError, errors::into_fatal, setup_fuelup_home};
+    use crate::{errors::into_fatal, setup_fuelup_home, WatcherError};
     use nix::{
-        sys::wait::{WaitStatus, waitpid},
-        unistd::{ForkResult, dup2, fork, pipe},
+        sys::wait::{waitpid, WaitStatus},
+        unistd::{dup2, fork, pipe, ForkResult},
     };
     use rusty_fork::rusty_fork_test;
     use std::{
         env::set_var,
         fs::File,
-        io::{Read, Write, stdout},
+        io::{stdout, Read, Write},
         os::fd::{AsRawFd, FromRawFd, IntoRawFd},
         sync::Arc,
     };
@@ -843,10 +844,10 @@ mod measure_process {
     use crate::setup_fuelup_home;
     use nix::{
         sys::{
-            signal::{Signal, kill},
-            wait::{WaitPidFlag, WaitStatus, waitpid},
+            signal::{kill, Signal},
+            wait::{waitpid, WaitPidFlag, WaitStatus},
         },
-        unistd::{ForkResult, fork},
+        unistd::{fork, ForkResult},
     };
     use rusty_fork::rusty_fork_test;
     use std::sync::Arc;
@@ -949,10 +950,10 @@ mod process_is_alive {
     use crate::setup_fuelup_home;
     use nix::{
         sys::{
-            signal::{Signal, kill},
-            wait::{WaitPidFlag, WaitStatus, waitpid},
+            signal::{kill, Signal},
+            wait::{waitpid, WaitPidFlag, WaitStatus},
         },
-        unistd::{ForkResult, fork},
+        unistd::{fork, ForkResult},
     };
     use rusty_fork::rusty_fork_test;
 

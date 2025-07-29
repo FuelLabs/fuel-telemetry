@@ -5,27 +5,27 @@ pub mod systeminfo_watcher;
 pub mod telemetry_formatter;
 pub mod telemetry_layer;
 
-pub use errors::{TelemetryError, WatcherError, into_fatal, into_recoverable};
+pub use errors::{into_fatal, into_recoverable, TelemetryError, WatcherError};
 pub use fuel_telemetry_macros::{new, new_with_watchers, new_with_watchers_and_init};
 pub use telemetry_formatter::TelemetryFormatter;
 pub use telemetry_layer::TelemetryLayer;
-pub use tracing::{Level, debug, error, event, info, span, trace, warn};
+pub use tracing::{debug, error, event, info, span, trace, warn, Level};
 pub use tracing_appender::non_blocking::WorkerGuard;
 
 pub mod prelude {
     pub use crate::{
-        Level, TelemetryLayer, debug, debug_telemetry, error, error_telemetry, event, info,
-        info_telemetry, span, span_telemetry, trace, trace_telemetry, warn, warn_telemetry,
+        debug, debug_telemetry, error, error_telemetry, event, info, info_telemetry, span,
+        span_telemetry, trace, trace_telemetry, warn, warn_telemetry, Level, TelemetryLayer,
     };
 }
 
 // Re-export tracing so proc_macros can use them
 pub use tracing as __reexport_tracing;
 pub use tracing_subscriber as __reexport_tracing_subscriber;
-pub use tracing_subscriber::Layer as __reexport_Layer;
 pub use tracing_subscriber::filter::EnvFilter as __reexport_EnvFilter;
 pub use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt as __reexport_tracing_subscriber_SubscriberExt;
 pub use tracing_subscriber::util::SubscriberInitExt as __reexport_SubscriberInitExt;
+pub use tracing_subscriber::Layer as __reexport_Layer;
 
 use dirs::home_dir;
 use libc::{c_int, c_long};
@@ -34,14 +34,14 @@ use nix::{
     fcntl::{Flock, FlockArg},
     sys::stat,
     unistd::{
-        ForkResult, Pid, SysconfVar, chdir, close, dup2, fork, getpid, pipe, read, setsid, sysconf,
-        write,
+        chdir, close, dup2, fork, getpid, pipe, read, setsid, sysconf, write, ForkResult, Pid,
+        SysconfVar,
     },
 };
 use std::{
     env::{current_exe, var, var_os},
-    fs::{File, OpenOptions, create_dir_all},
-    io::{Write, stderr, stdout},
+    fs::{create_dir_all, File, OpenOptions},
+    io::{stderr, stdout, Write},
     os::fd::{AsRawFd, OwnedFd},
     path::{Path, PathBuf},
     process::exit,
@@ -765,7 +765,7 @@ mod daemonise {
     use super::*;
     use nix::{
         errno::Errno,
-        sys::wait::{WaitStatus, waitpid},
+        sys::wait::{waitpid, WaitStatus},
         unistd::ForkResult,
     };
     use rusty_fork::rusty_fork_test;

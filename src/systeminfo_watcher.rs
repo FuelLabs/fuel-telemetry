@@ -1,16 +1,17 @@
 use crate::{
-    self as fuel_telemetry, EnvSetting, Level, Result, TelemetryError, WatcherResult, daemonise,
-    enforce_singleton, info, into_recoverable, span, telemetry_config, telemetry_formatter,
+    self as fuel_telemetry, daemonise, enforce_singleton, info, into_recoverable, span,
+    telemetry_config, telemetry_formatter, EnvSetting, Level, Result, TelemetryError,
+    WatcherResult,
 };
 
 use nix::{
     fcntl::{Flock, FlockArg},
     sys::{
-        signal::{Signal::SIGKILL, kill},
+        signal::{kill, Signal::SIGKILL},
         stat::fstat,
     },
     time::ClockId,
-    unistd::{Pid, getpid},
+    unistd::{getpid, Pid},
 };
 use std::{
     env::{set_var, var},
@@ -20,8 +21,8 @@ use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::{
-        LazyLock,
         atomic::{AtomicBool, AtomicI32, Ordering},
+        LazyLock,
     },
     time::Duration,
 };
@@ -579,7 +580,7 @@ mod config {
 #[cfg(test)]
 mod start {
     use super::*;
-    use crate::{WatcherError, into_recoverable, setup_fuelup_home};
+    use crate::{into_recoverable, setup_fuelup_home, WatcherError};
     use nix::sys::signal::kill;
     use rusty_fork::rusty_fork_test;
     use std::{fs::File, thread::sleep, time::Duration};
@@ -790,9 +791,9 @@ mod kill {
     use nix::{
         sys::{
             signal::Signal,
-            wait::{WaitPidFlag, WaitStatus, waitpid},
+            wait::{waitpid, WaitPidFlag, WaitStatus},
         },
-        unistd::{ForkResult, fork},
+        unistd::{fork, ForkResult},
     };
     use rusty_fork::rusty_fork_test;
     use std::thread::sleep;
@@ -844,7 +845,7 @@ mod kill {
 mod poll_systeminfo {
     use super::*;
     use crate::setup_fuelup_home;
-    use base64::{Engine, engine::general_purpose::STANDARD};
+    use base64::{engine::general_purpose::STANDARD, Engine};
     use rusty_fork::rusty_fork_test;
     use std::{
         io::{BufRead, BufReader},

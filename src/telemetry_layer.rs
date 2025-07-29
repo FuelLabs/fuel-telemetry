@@ -1,17 +1,17 @@
 use std::{env::var, io::Write, path::PathBuf};
 use tracing::{
-    Event,
     span::{self, Id, Record},
+    Event,
 };
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::{
-    Layer as LayerTrait, Registry,
-    fmt::{Layer, format::DefaultFields},
+    fmt::{format::DefaultFields, Layer},
     layer::Context,
+    Layer as LayerTrait, Registry,
 };
 
 use crate::{
-    Result, errors::TelemetryError, telemetry_config, telemetry_formatter::TelemetryFormatter,
+    errors::TelemetryError, telemetry_config, telemetry_formatter::TelemetryFormatter, Result,
 };
 
 /// A `tracing` `Layer` to generate telemetry to be later consumed into InfluxDB

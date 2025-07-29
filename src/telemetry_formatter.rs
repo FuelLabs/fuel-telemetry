@@ -1,4 +1,4 @@
-use base64::{Engine, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::Utc;
 use regex::Regex;
 use std::{env::var, path::PathBuf, sync::LazyLock};
@@ -6,8 +6,8 @@ use sysinfo::System;
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
     fmt::{
-        FmtContext, FormattedFields,
         format::{FormatEvent, FormatFields, Writer},
+        FmtContext, FormattedFields,
     },
     registry::LookupSpan,
 };
