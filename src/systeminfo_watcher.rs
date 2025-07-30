@@ -56,11 +56,11 @@ fn config() -> Result<&'static SystemInfoWatcherConfig> {
                 interval: get_env("SYSTEMINFO_WATCHER_INTERVAL", "2592000").parse()?,
                 metadata_timeout: get_env("METADATA_TIMEOUT", "3").parse()?,
                 lockfile: Path::new(&telemetry_config()?.fuelup_tmp)
-                    .join(format!("{}.lock", PROCESS_NAME)),
+                    .join(format!("{PROCESS_NAME}.lock")),
                 logfile: Path::new(&telemetry_config()?.fuelup_log)
-                    .join(format!("{}.log", PROCESS_NAME)),
+                    .join(format!("{PROCESS_NAME}.log")),
                 touchfile: Path::new(&telemetry_config()?.fuelup_tmp)
-                    .join(format!("{}.touch", PROCESS_NAME)),
+                    .join(format!("{PROCESS_NAME}.touch")),
             })
         });
 
@@ -264,7 +264,7 @@ impl SystemInfoWatcher {
             .append(true)
             .open(&config()?.logfile)?;
 
-        Ok(writeln!(file, "{}", message)?)
+        Ok(writeln!(file, "{message}")?)
     }
 }
 
@@ -440,7 +440,7 @@ fn detect_vm() -> Result<&'static str> {
     let vendor_files = ["bios_vendor", "sys_vendor", "product_name"];
 
     for file in vendor_files {
-        if let Ok(contents) = std::fs::read_to_string(format!("/sys/class/dmi/id/{}", file)) {
+        if let Ok(contents) = std::fs::read_to_string(format!("/sys/class/dmi/id/{file}")) {
             for vendor in vm_vendors {
                 if contents.contains(vendor) {
                     return Ok(vendor);

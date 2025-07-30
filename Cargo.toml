@@ -1,10 +1,11 @@
 [package]
 name = "fuel-telemetry"
-version = "0.1.0"
-edition = "2021"
-homepage = "https://fuel.network/"
-license = "Apache-2.0"
-repository = "https://github.com/FuelLabs/fuel-telemetry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "A tracing library to implement Fuel telemetry"
 
 [lib]
@@ -14,6 +15,14 @@ path = "src/lib.rs"
 [workspace]
 members = ["fuel-telemetry-macros"]
 default-members = [".", "fuel-telemetry-macros"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+homepage = "https://fuel.network/"
+license = "Apache-2.0"
+repository = "https://github.com/FuelLabs/fuel-telemetry"
 
 [dependencies]
 base64 = "0.22"

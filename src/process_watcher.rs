@@ -63,8 +63,7 @@ fn config() -> Result<&'static ProcessWatcherConfig> {
         Ok(ProcessWatcherConfig {
             check_interval,
             measure_interval,
-            logfile: Path::new(&telemetry_config()?.fuelup_log)
-                .join(format!("{}.log", PROCESS_NAME)),
+            logfile: Path::new(&telemetry_config()?.fuelup_log).join(format!("{PROCESS_NAME}.log")),
         })
     });
 
@@ -192,7 +191,7 @@ impl ProcessWatcher {
             .append(true)
             .open(&config()?.logfile)?;
 
-        Ok(writeln!(file, "{}", message)?)
+        Ok(writeln!(file, "{message}")?)
     }
 }
 
