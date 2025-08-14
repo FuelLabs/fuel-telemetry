@@ -14,7 +14,7 @@ get_toml_version () {
     local toml_path="$1"
 
     local manifest="Cargo.toml"
-    echo $(dasel -f $manifest $toml_path | tr -d '"')
+    echo $(dasel -f $manifest $toml_path | tr -d '"' | tr -d "'")
 }
 
 check_version () {
@@ -42,7 +42,7 @@ if [ -z "$REF" ]; then
 fi
 
 for toml_path in \
-    "package.version" \
+    "workspace.package.version" \
 ; do
     check_version $REF $toml_path
 done
