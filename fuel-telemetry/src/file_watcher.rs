@@ -34,11 +34,11 @@ use std::{
 //
 
 const PROCESS_NAME: &str = "telemetry-file-watcher";
-const INFLUXDB_ORG: &str = "Dev%20Team";
-const INFLUXDB_BUCKET: &str = "telemetry";
+const INFLUXDB_ORG: &str = "Fuel-Public-Telemetry";
+const INFLUXDB_BUCKET: &str = "fuel-telemetry";
 const INFLUXDB_URL: &str = "https://us-east-1-1.aws.cloud2.influxdata.com";
 const INFLUXDB_TOKEN: &str =
-    "l7Sho-XGD9BfGLQrKWwoBub-hC0gqJ5xRS2zz4pkjb6cGyBJZUQpw7qpwTfXTFGLXufCh7ZmQWv4bUtAsT60Ag==";
+    "RwaVSX5aqrkhA72ElFOuakazEq59xL6FNcT_UvEJuR1PVuOna80e4Ctu9az40l-uCiWz4WVaQtOBsO1km_dBXw==";
 
 /// Configuration for `FileWatcher`
 #[derive(Debug, Clone)]
